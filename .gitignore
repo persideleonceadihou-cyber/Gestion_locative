@@ -34,6 +34,8 @@ migrate_working_dir/
 /coverage/
 node_modules/
 .firebase/
+.vercel/
+.npm-cache/
 
 # Symbolication related
 app.*.symbols
