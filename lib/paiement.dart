@@ -85,7 +85,7 @@ class _PaiementPageState extends State<PaiementPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF6F7FB),
+      backgroundColor: const Color(0xFFFFF3E0),
       appBar: AppBar(
         backgroundColor: Colors.white,
         title: const Text(
@@ -215,12 +215,11 @@ class _PaymentsContent extends StatelessWidget {
     final pendingTotal = _sumPayments(pendingPayments);
     final lateTotal = _sumPayments(latePayments);
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
+    return ListView(
+      padding: const EdgeInsets.all(16.0),
+       shrinkWrap: true,
+      children: [
+        const Text(
             'Suivi des paiements',
             style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
@@ -232,102 +231,70 @@ class _PaymentsContent extends StatelessWidget {
             style: const TextStyle(fontSize: 15, color: Colors.grey),
           ),
           const SizedBox(height: 24),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final availableWidth = constraints.maxWidth;
-              final cardWidth = availableWidth >= 720
-                  ? (availableWidth - 24) / 3
-                  : availableWidth >= 460
-                      ? (availableWidth - 12) / 2
-                      : availableWidth;
-
-              return Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  SizedBox(
-                    width: cardWidth,
-                    child: _PaymentSummaryCard(
-                      title: 'Loyers payes',
-                      amount: '${_formatPaymentAmount(paidTotal)} FCFA',
-                      subtitle: '${paidPayments.length} paiements valides',
-                      backgroundColor: const Color(0xFFFFFFFF),
-                      accentColor: const Color(0xFF1F9D55),
-                      icon: Icons.check_circle,
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: _PaymentSummaryCard(
-                      title: 'En attente',
-                      amount: '${_formatPaymentAmount(pendingTotal)} FCFA',
-                      subtitle:
-                          '${pendingPayments.length} paiements a confirmer',
-                      backgroundColor: const Color(0xFFFFFFFF),
-                      accentColor: const Color(0xFFE68A00),
-                      icon: Icons.schedule,
-                    ),
-                  ),
-                  SizedBox(
-                    width: cardWidth,
-                    child: _PaymentSummaryCard(
-                      title: 'En retard',
-                      amount: '${_formatPaymentAmount(lateTotal)} FCFA',
-                      subtitle: '${latePayments.length} loyers non regles',
-                      backgroundColor: const Color(0xFFFFFFFF),
-                      accentColor: const Color(0xFFD92D20),
-                      icon: Icons.warning_rounded,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 28),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: const Color(0xFFE5E7EB)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          SizedBox(
+            height: 200,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
               children: [
-                const Text(
-                  'Filtrer les flux',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                _PaymentSummaryCard(
+                  title: 'Montant loyer paye',
+                  amount: '${_formatPaymentAmount(paidTotal)} FCFA',
+                  subtitle: '${paidPayments.length} paiements valides',
+                  color: const Color(0xFFE8F5E9),
+                  accentColor: Colors.green,
+                  icon: Icons.check_circle,
                 ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    _PaymentFilterChip(
-                      label: 'Tous les flux',
-                      isSelected: selectedFilter == 'Tous les flux',
-                      onTap: () => onFilterSelected('Tous les flux'),
-                    ),
-                    _PaymentFilterChip(
-                      label: 'En attente',
-                      isSelected: selectedFilter == 'En attente',
-                      onTap: () => onFilterSelected('En attente'),
-                    ),
-                    _PaymentFilterChip(
-                      label: 'Paye',
-                      isSelected: selectedFilter == 'Paye',
-                      onTap: () => onFilterSelected('Paye'),
-                    ),
-                    _PaymentFilterChip(
-                      label: 'En retard',
-                      isSelected: selectedFilter == 'En retard',
-                      onTap: () => onFilterSelected('En retard'),
-                    ),
-                  ],
+                _PaymentSummaryCard(
+                  title: 'En attente',
+                  amount: '${_formatPaymentAmount(pendingTotal)} FCFA',
+                  subtitle: '${pendingPayments.length} paiements a confirmer',
+                  color: const Color(0xFFFFF8E1),
+                  accentColor: Colors.orange,
+                  icon: Icons.schedule,
+                ),
+                _PaymentSummaryCard(
+                  title: 'En retard',
+                  amount: '${_formatPaymentAmount(lateTotal)} FCFA',
+                  subtitle: '${latePayments.length} loyers non regles',
+                  color: const Color(0xFFFFEBEE),
+                  accentColor: Colors.red,
+                  icon: Icons.warning_rounded,
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: 28),
+
+          const Text(
+            'Filtrer les flux',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _PaymentFilterChip(
+                label: 'Tous les flux',
+                isSelected: selectedFilter == 'Tous les flux',
+                onTap: () => onFilterSelected('Tous les flux'),
+              ),
+              _PaymentFilterChip(
+                label: 'En attente',
+                isSelected: selectedFilter == 'En attente',
+                onTap: () => onFilterSelected('En attente'),
+              ),
+              _PaymentFilterChip(
+                label: 'Paye',
+                isSelected: selectedFilter == 'Paye',
+                onTap: () => onFilterSelected('Paye'),
+              ),
+              _PaymentFilterChip(
+                label: 'En retard',
+                isSelected: selectedFilter == 'En retard',
+                onTap: () => onFilterSelected('En retard'),
+              ),
+            ],
           ),
           const SizedBox(height: 28),
           Text(
@@ -357,14 +324,12 @@ class _PaymentsContent extends StatelessWidget {
                 dueDate: payment.dueDate,
                 status: payment.status,
                 statusColor: payment.statusColor,
-                onMarkAsPaid: payment.status == 'Paye'
-                    ? null
-                    : () => onMarkAsPaid(payment),
+                onMarkAsPaid: null,
               ),
             ),
         ],
-      ),
-    );
+      );
+    
   }
 
   int _sumPayments(List<PaymentRecord> records) {
@@ -391,7 +356,7 @@ class _PaymentSummaryCard extends StatelessWidget {
   final String title;
   final String amount;
   final String subtitle;
-  final Color backgroundColor;
+  final Color color;
   final Color accentColor;
   final IconData icon;
 
@@ -399,7 +364,7 @@ class _PaymentSummaryCard extends StatelessWidget {
     required this.title,
     required this.amount,
     required this.subtitle,
-    required this.backgroundColor,
+    required this.color,
     required this.accentColor,
     required this.icon,
   });
@@ -407,48 +372,26 @@ class _PaymentSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      width: 230,
+      margin: const EdgeInsets.only(right: 14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        color: color,
+        borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: accentColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(icon, color: accentColor),
-              ),
-              const Spacer(),
-              Container(
-                width: 10,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: accentColor,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-              ),
-            ],
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: accentColor,
+            child: Icon(icon, color: accentColor),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Text(
             title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: const TextStyle(
               fontSize: 14,
               color: Colors.black87,
@@ -461,7 +404,7 @@ class _PaymentSummaryCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 21,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
               color: accentColor,
             ),
@@ -542,129 +485,100 @@ class _PaymentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+      elevation: 1.5,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
+        padding: const EdgeInsets.all(16),
+        child: Row(
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: statusColor,
+              child: Icon(Icons.payments_outlined, color: statusColor),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    tenantName,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    propertyName,
+                    style: const TextStyle(color: Colors.black54),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    dueDate,
+                    style: const TextStyle(color: Colors.black45),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(Icons.payments_outlined, color: statusColor),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tenantName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 5),
-                      Text(
-                        propertyName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: Colors.black54),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
                 Text(
                   amount,
-                  textAlign: TextAlign.right,
                   style: const TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    dueDate,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.black45),
-                  ),
-                ),
-                const SizedBox(width: 10),
+                const SizedBox(height: 8),
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
-                    vertical: 7,
+                    vertical: 6,
                   ),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.12),
+                    color: statusColor,
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     status,
                     style: TextStyle(
                       color: statusColor,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
+                if (onMarkAsPaid != null) ...[
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: onMarkAsPaid,
+                    icon: const Icon(Icons.check, size: 16),
+                    label: const Text('  '),  
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green,
+                      foregroundColor: Colors.white,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
+                      textStyle: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
-            if (onMarkAsPaid != null) ...[
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: onMarkAsPaid,
-                  icon: const Icon(Icons.check, size: 18),
-                  label: const Text('Marquer paye'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF1F9D55),
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    textStyle: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
     );
   }
 }
+

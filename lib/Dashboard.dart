@@ -296,12 +296,13 @@ class _DashboardHomePage extends StatelessWidget {
                   () => print("tous les biens"),
                 ),
                 _buildFilterButton(
-                  "Locataire",
+                  "Locataires",
                   () => Navigator.pushNamed(context, '/locataire'),
                 ),
                 _buildFilterButton(
-                  "Maison",
-                  () => Navigator.pushNamed(context, '/maison'),
+                  "Payé cash",
+                  () => Navigator.pushNamed(context, '/payeCash'),
+                  
                 ),
               ],
             ),

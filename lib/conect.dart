@@ -358,63 +358,50 @@ class _ConnectState extends State<Connect> {
         decoration: const BoxDecoration(color: Color(0xFFFFF3E0)),
         child: SafeArea(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 26),
             child: Column(
               children: [
-                const SizedBox(height: 24),
+                const SizedBox(height: 2),
                 Column(
                   children: [
                     Column(
                       children: [
                         Container(
-                          child: Image.asset(
-                        'assets/images/logo (2).png',
-                        width: 200,
-                        height: 200,
-                      
-                    ),
+                          color: const Color(0xFFFFF3E0),
+                          child: ColorFiltered(
+                            colorFilter: const ColorFilter.mode(
+                              Color(0xFFFFF3E0),
+                              BlendMode.multiply,
+                            ),
+                            child: Image.asset(
+                              'assets/images/logo (2).png',
+                              width: 100,
+                              height: 100,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ), 
+                  ],
+                ),
+                Transform.translate(
+                  offset: const Offset(0, -14),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(28.0),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black,
+                          blurRadius: 24,
+                          offset: const Offset(0, 12),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 18),
-                      
-                    SizedBox(height: 18),
-                    Text(
-                      'Gestion locative',
-                      style: TextStyle(
-                        fontSize: 34,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
-                      ),
-                    ),
-                    SizedBox(height: 8),
-                    Text(
-                      'Votre espace de gestion immobiliere simple et moderne',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Color.fromARGB(255, 36, 36, 37),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 28),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(28.0),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black,
-                        blurRadius: 24,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(24.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
                       Text(
                         _isLogin ? 'Se connecter' : 'Creer un compte',
                         textAlign: TextAlign.center,
@@ -571,8 +558,9 @@ class _ConnectState extends State<Connect> {
                           ),
                         ],
                       ),
-                    ],
+                      ],
                   ),
+                ),
                 ),
               ],
             ),

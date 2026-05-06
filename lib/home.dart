@@ -74,7 +74,7 @@ class _HomeState extends State<Home> {
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Suivez vos locataires, vos paiements, vos contrats et vos documents dans une seule application claire.',
+                  'Bienvenu sur votre application de gestion de biens immobiliers',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Color(0xFFDDEAF8),

@@ -10,6 +10,8 @@ import 'package:gestion_locative/paiement.dart';
 import 'package:gestion_locative/profil.dart';
 import 'package:gestion_locative/scan.dart';
 import 'package:gestion_locative/firebase_options.dart';
+import 'package:gestion_locative/PayeCash.dart';
+import 'package:gestion_locative/home.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,7 +32,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
         useMaterial3: true,
       ),
-      home: const Connect(),
+      home: const Home(),
       routes: {
         '/connect': (context) => const Connect(),
         '/dashboard': (context) => const Dashboard(),
@@ -40,8 +42,8 @@ class MyApp extends StatelessWidget {
         '/scan': (context) => const ScanPage(),
         "/proprietaire": (context) => const Propretaire(),
         "/locataire": (context) => const Locataire(),
-
         "/ajout": (context) => const AddTenantPage(),
+        "/payeCash": (context) => const PayeCashScreen(),
       },
     );
   }
