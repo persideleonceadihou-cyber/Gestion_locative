@@ -1,455 +1,473 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
-import 'package:gestion_locative/Dashboard.dart';
-import 'package:gestion_locative/document.dart';
-import 'package:gestion_locative/paiement.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:image_picker/image_picker.dart';
+// import 'package:gestion_locative/conect.dart';
+// import 'package:gestion_locative/mesBiens.dart';
+// import 'package:gestion_locative/paiement_refonte.dart';
+// import 'package:gestion_locative/accueil_refonte.dart';
 
-class Profil extends StatelessWidget {
-  const Profil({super.key});
+// ─────────────────────────────────────────────
+// Palette
+// ─────────────────────────────────────────────
+class _C {
+  static const navy = Color(0xFF1A2B5E);
+  static const cream = Color(0xFFF2C94C);
+  static const creamLight = Color(0xFFFDF6DC);
+  static const bgPage = Color(0xFFF5F0E8);
+  static const white = Color(0xFFFFFFFF);
+  static const textMain = Color(0xFF1A2B5E);
+  static const textMuted = Color(0xFF7A6F52);
+  static const border = Color(0xFFECE6D6);
+  static const redText = Color(0xFFBB2020);
+  static const redBg = Color(0xFFFFF0F0);
+  static const redBd = Color(0xFFFFCDD2);
+}
 
-  static Future<void> _signOut(BuildContext context) async {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const Dashboard()),
-      (route) => false,
-    );
-  }
+// ─────────────────────────────────────────────
+// Page Profil
+// ─────────────────────────────────────────────
+class Profil extends StatefulWidget {
+  final bool showBottomNav;
+
+  const Profil({super.key, this.showBottomNav = true});
+
+  @override
+  State<Profil> createState() => _ProfilState();
+}
+
+class _ProfilState extends State<Profil> {
+  bool _isPickingPhoto = false;
 
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
-    final profile = _UserProfile(
-      name: user?.displayName?.trim().isNotEmpty == true
-          ? user!.displayName!.trim()
-          : 'Utilisateur local',
-      email: user?.email ?? 'local@gestion.app',
-      phone: user?.phoneNumber ?? '+229 90 00 00 00',
-    );
+
+    // Initiales depuis displayName ou email
+    final name = user?.displayName?.trim().isNotEmpty == true
+        ? user!.displayName!.trim()
+        : 'Utilisateur';
+    final email = user?.email ?? 'utilisateur@gmail.com';
+    final initials = _initials(name);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF3E0),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'Profil',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Deconnexion',
-            onPressed: () => _signOut(context),
-            icon: const Icon(Icons.logout_outlined),
+      backgroundColor: _C.bgPage,
+      body: Column(
+        children: [
+          // ── HEADER navy ──────────────────────
+          StreamBuilder<DocumentSnapshot>(
+            stream: user == null
+                ? null
+                : FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(user.uid)
+                      .snapshots(),
+            builder: (context, snapshot) {
+              final data = snapshot.data?.data() as Map<String, dynamic>?;
+              return _buildHeader(
+                context,
+                initials,
+                data?['displayName']?.toString() ?? name,
+                data?['email']?.toString() ?? email,
+                data?['profilePhotoBase64']?.toString(),
+              );
+            },
+          ),
+          // ── CORPS ────────────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Rows principaux
+                  _menuRow(
+                    icon: Icons.person_outline,
+                    label: 'Informations personnelles',
+                    onTap: () {},
+                  ),
+                  const SizedBox(height: 8),
+                  _menuRow(
+                    icon: Icons.home_work_outlined,
+                    label: 'Mes Biens(8)',
+                    onTap: () {
+                      // Navigator.push(context,
+                      //   MaterialPageRoute(builder: (_) => const MesBiens()));
+                    },
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Section Sécurité
+                  const Text(
+                    'Securité',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: _C.textMain,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  _menuRow(
+                    icon: Icons.lock_outline,
+                    label: 'Mot de passe',
+                    onTap: () => _resetPassword(context, email),
+                    trailing: const Icon(
+                      Icons.chevron_right,
+                      color: _C.textMuted,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Bouton déconnexion
+                  _buildSignOut(context),
+                ],
+              ),
+            ),
           ),
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: Column(
-            children: [
-              _ProfileHeaderCard(profile: profile),
-              const SizedBox(height: 18),
-              const _ProfileStatsRow(),
-              const SizedBox(height: 18),
-              _ProfileInfoCard(profile: profile),
-              const SizedBox(height: 18),
-              const _ProfileActionsCard(),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 3,
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        backgroundColor: Colors.white,
-        onTap: (int index) {
-          if (index == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const Dashboard()),
-            );
-          } else if (index == 1) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const Paiement()),
-            );
-          } else if (index == 2) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const Document()),
-            );
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.money), label: 'Paiement'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.document_scanner),
-            label: 'Document',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
-      ),
+      bottomNavigationBar: widget.showBottomNav
+          ? _buildBottomNav(context)
+          : null,
     );
   }
-}
 
-class _UserProfile {
-  final String name;
-  final String email;
-  final String phone;
-
-  const _UserProfile({
-    required this.name,
-    required this.email,
-    required this.phone,
-  });
-}
-
-class _ProfileHeaderCard extends StatelessWidget {
-  final _UserProfile profile;
-
-  const _ProfileHeaderCard({required this.profile});
-
-  @override
-  Widget build(BuildContext context) {
+  // ── HEADER ────────────────────────────────────────────
+  Widget _buildHeader(
+    BuildContext context,
+    String initials,
+    String name,
+    String email,
+    String? photoBase64,
+  ) {
+    final photoBytes = _decodePhoto(photoBase64);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF132238), Color(0xFF1C5D99), Color(0xFF4FA3D9)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
+      color: _C.navy,
+      padding: const EdgeInsets.fromLTRB(16, 52, 16, 24),
       child: Column(
         children: [
-          const CircleAvatar(
-            radius: 42,
-            backgroundColor: Colors.white,
-            child: Icon(Icons.person, size: 48, color: Color(0xFF132238)),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            profile.name,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            'Gestionnaire locatif',
-            style: TextStyle(color: Color(0xFFDCE7F4), fontSize: 14),
-          ),
-          const SizedBox(height: 14),
-          const Text(
-            'Suivi des locataires, des contrats, des paiements et des documents depuis un seul tableau de bord.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFFDCE7F4), height: 1.4),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileStatsRow extends StatelessWidget {
-  const _ProfileStatsRow();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Row(
-      children: [
-        Expanded(
-          child: _ProfileStatCard(
-            title: 'Biens suivis',
-            value: '8',
-            icon: Icons.home_work_outlined,
-            color: Color(0xFFE8F1FF),
-            iconColor: Color(0xFF2B7FFF),
-          ),
-        ),
-        SizedBox(width: 12),
-        Expanded(
-          child: _ProfileStatCard(
-            title: 'Locataires',
-            value: '6',
-            icon: Icons.groups_2_outlined,
-            color: Color(0xFFEAF7EF),
-            iconColor: Color(0xFF149954),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _ProfileStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final IconData icon;
-  final Color color;
-  final Color iconColor;
-
-  const _ProfileStatCard({
-    required this.title,
-    required this.value,
-    required this.icon,
-    required this.color,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: iconColor),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          GestureDetector(
+            onTap: _isPickingPhoto ? null : () => _pickProfilePhoto(context),
+            child: Stack(
+              alignment: Alignment.bottomRight,
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF607086),
-                    fontWeight: FontWeight.w600,
-                  ),
+                CircleAvatar(
+                  radius: 35,
+                  backgroundColor: _C.cream,
+                  backgroundImage: photoBytes == null
+                      ? null
+                      : MemoryImage(photoBytes),
+                  child: photoBytes == null
+                      ? Text(
+                          initials,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: _C.navy,
+                          ),
+                        )
+                      : null,
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    color: Color(0xFF132238),
-                    fontWeight: FontWeight.w800,
+                Container(
+                  width: 26,
+                  height: 26,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: _C.navy, width: 2),
                   ),
+                  child: _isPickingPhoto
+                      ? const Padding(
+                          padding: EdgeInsets.all(6),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: _C.navy,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.camera_alt_outlined,
+                          color: _C.navy,
+                          size: 15,
+                        ),
                 ),
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileInfoCard extends StatelessWidget {
-  final _UserProfile profile;
-
-  const _ProfileInfoCard({required this.profile});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Informations personnelles',
-            style: TextStyle(
-              color: Color(0xFF132238),
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _ProfileInfoRow(label: 'Nom complet', value: profile.name),
-          _ProfileInfoRow(label: 'Email', value: profile.email),
-          _ProfileInfoRow(label: 'Telephone', value: profile.phone),
-          const _ProfileInfoRow(
-            label: 'Fonction',
-            value: 'Administrateur immobilier',
-          ),
-          const _ProfileInfoRow(label: 'Ville', value: 'Porto-Novo, Benin'),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileInfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _ProfileInfoRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              label,
-              style: const TextStyle(
-                color: Color(0xFF6C7B8D),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: Color(0xFF132238),
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileActionsCard extends StatelessWidget {
-  const _ProfileActionsCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Actions rapides',
-            style: TextStyle(
-              color: Color(0xFF132238),
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 16),
-          _ActionTile(
-            icon: Icons.lock_outline,
-            title: 'Securite',
-            subtitle: 'Mot de passe et acces',
-            onTap: () {},
-          ),
           const SizedBox(height: 12),
-          _ActionTile(
-            icon: Icons.notifications_outlined,
-            title: 'Notifications',
-            subtitle: 'Rappels de paiement et alertes',
-            onTap: () {},
+          Text(
+            name,
+            style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
-          const SizedBox(height: 12),
-          _ActionTile(
-            icon: Icons.help_outline,
-            title: 'Support',
-            subtitle: 'Assistance et aide a l\'utilisation',
-            onTap: () {},
-          ),
-          const SizedBox(height: 12),
-          _ActionTile(
-            icon: Icons.logout_outlined,
-            title: 'Deconnexion',
-            subtitle: 'Quitter le compte actuel',
-            onTap: () => Profil._signOut(context),
+          const SizedBox(height: 4),
+          Text(
+            email,
+            style: const TextStyle(fontSize: 12, color: Color(0xFFB0BAD0)),
           ),
         ],
       ),
     );
   }
-}
 
-class _ActionTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  Uint8List? _decodePhoto(String? value) {
+    if (value == null || value.isEmpty) return null;
+    try {
+      final payload = value.contains(',') ? value.split(',').last : value;
+      return base64Decode(payload);
+    } catch (_) {
+      return null;
+    }
+  }
 
-  const _ActionTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+  Future<void> _pickProfilePhoto(BuildContext context) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFFF7F9FC),
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(icon, color: const Color(0xFF132238)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        color: Color(0xFF132238),
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(color: Color(0xFF6C7B8D)),
-                    ),
-                  ],
+    setState(() => _isPickingPhoto = true);
+    try {
+      final image = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 700,
+        imageQuality: 70,
+      );
+      if (image == null) return;
+
+      final bytes = await image.readAsBytes();
+      final photoData = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        'displayName': user.displayName ?? 'Utilisateur',
+        'email': user.email ?? '',
+        'profilePhotoBase64': photoData,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Photo de profil mise a jour.'),
+          backgroundColor: const Color(0xFF3B6D11),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isPickingPhoto = false);
+    }
+  }
+
+  // ── MENU ROW ──────────────────────────────────────────
+  Widget _menuRow({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    Widget? trailing,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: _C.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.border),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: _C.textMain,
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded),
-            ],
+            ),
+            trailing ?? const SizedBox.shrink(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── BOUTON DÉCONNEXION ────────────────────────────────
+  Widget _buildSignOut(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _confirmSignOut(context),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: _C.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _C.border),
+        ),
+        child: const Center(
+          child: Text(
+            'se deconnecter',
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.bold,
+              color: _C.redText,
+            ),
           ),
         ),
       ),
     );
+  }
+
+  // ── BOTTOM NAV ────────────────────────────────────────
+  Widget _buildBottomNav(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: _C.white,
+        border: Border(top: BorderSide(color: _C.border)),
+      ),
+      child: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: 4,
+        selectedItemColor: _C.navy,
+        unselectedItemColor: _C.textMuted,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        selectedLabelStyle: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+        ),
+        unselectedLabelStyle: const TextStyle(fontSize: 11),
+        onTap: (i) {
+          final routes = [
+            '/accueil',
+            '/mesBiens',
+            '/paiement',
+            '/locataire',
+            '/profil',
+          ];
+          if (i == 4) return;
+          Navigator.pushReplacementNamed(context, routes[i]);
+        },
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Accueil',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_balance_outlined),
+            activeIcon: Icon(Icons.account_balance),
+            label: 'Biens',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.credit_card_outlined),
+            activeIcon: Icon(Icons.credit_card),
+            label: 'Paiement',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.people_outline),
+            activeIcon: Icon(Icons.people),
+            label: 'Locataires',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
+            activeIcon: Icon(Icons.person),
+            label: 'Profil',
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── HELPERS ───────────────────────────────────────────
+  String _initials(String name) {
+    final parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return name.isNotEmpty ? name[0].toUpperCase() : 'U';
+  }
+
+  Future<void> _resetPassword(BuildContext context, String email) async {
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(
+        email: email.trim().toLowerCase(),
+      );
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Email de réinitialisation envoyé à $email'),
+          backgroundColor: const Color(0xFF3B6D11),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    } on FirebaseAuthException catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message ?? 'Erreur'),
+          backgroundColor: const Color(0xFF993C1D),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmSignOut(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Se déconnecter ?',
+          style: TextStyle(fontWeight: FontWeight.bold, color: _C.navy),
+        ),
+        content: const Text(
+          'Voulez-vous vraiment vous déconnecter ?',
+          style: TextStyle(color: _C.textMuted),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler', style: TextStyle(color: _C.textMuted)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _C.redText,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              elevation: 0,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Déconnecter',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (ok == true && context.mounted) {
+      await FirebaseAuth.instance.signOut();
+      if (!context.mounted) return;
+      Navigator.pushNamedAndRemoveUntil(context, '/connect', (route) => false);
+    }
   }
 }

@@ -1,82 +1,6 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:gestion_locative/ajout.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-
-Future<void> addLocataire(
-  String nom,
-  String email,
-  String numero_de_chambre,
-  String montant_du_loyer,
-  String telephone,
-  String bien,
-) async {
-  final uid = FirebaseAuth.instance.currentUser!.uid;
-
-  await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('locataires')
-      .add({
-        'nom': nom,
-        'email': email,
-        'chambre': numero_de_chambre,
-        'loyer': montant_du_loyer,
-        'telephone': telephone,
-        'bien': bien,
-        'createdAt': DateTime.now(),
-      });
-}
-
-Stream<List<Map<String, dynamic>>> getLocataires() {
-  final uid = FirebaseAuth.instance.currentUser!.uid;
-
-  return FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('locataires')
-      .snapshots()
-      .map(
-        (snapshot) =>
-            snapshot.docs.map((doc) => {...doc.data(), 'id': doc.id}).toList(),
-      );
-}
-
-Future<void> updateLocataire(String id, String nom) async {
-  final uid = FirebaseAuth.instance.currentUser!.uid;
-
-  await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('locataires')
-      .doc(id)
-      .update({'nom': nom});
-}
-
-Future<void> deleteLocataire(String id) async {
-  final uid = FirebaseAuth.instance.currentUser!.uid;
-
-  await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('locataires')
-      .doc(id)
-      .delete();
-}
-
-Future<void> addDocument(String locataireId, String titre) async {
-  final uid = FirebaseAuth.instance.currentUser!.uid;
-  await FirebaseFirestore.instance
-      .collection('users')
-      .doc(uid)
-      .collection('locataires')
-      .doc(locataireId)
-      .collection('documents')
-      .add({'titre': titre, 'date_creation': DateTime.now()});
-}
 
 class TenantDocument {
   final String title;
@@ -92,22 +16,27 @@ class TenantDocument {
   });
 
   factory TenantDocument.fromMap(Map<String, dynamic>? map) {
+    if (map == null) return const TenantDocument.empty();
     return TenantDocument(
-      title: _readString(map, 'title', fallback: 'Document'),
-      reference: _readString(map, 'reference', fallback: 'Sans reference'),
-      dateLabel: _readString(map, 'dateLabel', fallback: 'Date non renseignee'),
-      state: _readString(map, 'state', fallback: 'Non renseigne'),
+      title: map['title']?.toString() ?? '',
+      reference: map['reference']?.toString() ?? '',
+      dateLabel: map['dateLabel']?.toString() ?? '',
+      state: map['state']?.toString() ?? '',
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'title': title,
-      'reference': reference,
-      'dateLabel': dateLabel,
-      'state': state,
-    };
-  }
+  const TenantDocument.empty()
+    : title = '',
+      reference = '',
+      dateLabel = '',
+      state = '';
+
+  Map<String, dynamic> toMap() => {
+    'title': title,
+    'reference': reference,
+    'dateLabel': dateLabel,
+    'state': state,
+  };
 }
 
 class TenantRecord {
@@ -147,521 +76,416 @@ class TenantRecord {
     required this.emergencyContact,
   });
 
-  factory TenantRecord.fromMap(Map<String, dynamic> data) {
-    final status = _readString(data, 'statusLabel', fallback: 'A jour');
-
+  factory TenantRecord.fromMap(Map<String, dynamic> map) {
     return TenantRecord(
-      id: _readOptionalString(data, 'id'),
-      name: _readString(data, 'name', fallback: 'Locataire sans nom'),
-      roomNumber: _readString(data, 'roomNumber', fallback: '-'),
-      propertyName: _readString(
-        data,
-        'propertyName',
-        fallback: 'Bien non renseigne',
-      ),
-      phone: _readString(data, 'phone', fallback: 'Telephone non renseigne'),
-      email: _readString(data, 'email', fallback: 'Email non renseigne'),
-      rentAmount: _readString(data, 'rentAmount', fallback: '0 FCFA'),
-      statusLabel: status,
-      statusColor: _statusColorFor(status),
-      balanceLabel: _readString(
-        data,
-        'balanceLabel',
-        fallback: 'Suivi non renseigne',
-      ),
-      occupationLabel: _readString(
-        data,
-        'occupationLabel',
-        fallback: 'Date non renseignee',
-      ),
+      id: map['id']?.toString(),
+      name: map['name']?.toString() ?? map['nom']?.toString() ?? '',
+      roomNumber:
+          map['roomNumber']?.toString() ?? map['chambre']?.toString() ?? '',
+      propertyName:
+          map['propertyName']?.toString() ?? map['bien']?.toString() ?? '',
+      phone: map['phone']?.toString() ?? '',
+      email: map['email']?.toString() ?? '',
+      rentAmount: map['rentAmount']?.toString() ?? '0 FCFA',
+      statusLabel: map['statusLabel']?.toString() ?? 'A jour',
+      statusColor:
+          _colorFromValue(map['statusColor']) ??
+          _statusColorFor(map['statusLabel']?.toString() ?? 'A jour'),
+      balanceLabel: map['balanceLabel']?.toString() ?? '',
+      occupationLabel: map['occupationLabel']?.toString() ?? '',
       contract: TenantDocument.fromMap(
-        data['contract'] is Map<String, dynamic>
-            ? data['contract'] as Map<String, dynamic>
-            : null,
+        map['contract'] as Map<String, dynamic>?,
       ),
       inventory: TenantDocument.fromMap(
-        data['inventory'] is Map<String, dynamic>
-            ? data['inventory'] as Map<String, dynamic>
-            : null,
+        map['inventory'] as Map<String, dynamic>?,
       ),
-      paymentSummary: _readString(
-        data,
-        'paymentSummary',
-        fallback: 'Aucun paiement renseigne',
-      ),
-      notes: _readString(data, 'notes', fallback: 'Aucune note ajoutee.'),
-      emergencyContact: _readString(
-        data,
-        'emergencyContact',
-        fallback: 'Contact urgence non renseigne',
-      ),
+      paymentSummary: map['paymentSummary']?.toString() ?? '',
+      notes: map['notes']?.toString() ?? '',
+      emergencyContact: map['emergencyContact']?.toString() ?? '',
     );
   }
 
-  TenantRecord copyWith({String? id}) {
+  TenantRecord copyWith({
+    String? id,
+    String? name,
+    String? roomNumber,
+    String? propertyName,
+    String? phone,
+    String? email,
+    String? rentAmount,
+    String? statusLabel,
+    Color? statusColor,
+    String? balanceLabel,
+    String? occupationLabel,
+    TenantDocument? contract,
+    TenantDocument? inventory,
+    String? paymentSummary,
+    String? notes,
+    String? emergencyContact,
+  }) {
     return TenantRecord(
       id: id ?? this.id,
-      name: name,
-      roomNumber: roomNumber,
-      propertyName: propertyName,
-      phone: phone,
-      email: email,
-      rentAmount: rentAmount,
-      statusLabel: statusLabel,
-      statusColor: statusColor,
-      balanceLabel: balanceLabel,
-      occupationLabel: occupationLabel,
-      contract: contract,
-      inventory: inventory,
-      paymentSummary: paymentSummary,
-      notes: notes,
-      emergencyContact: emergencyContact,
+      name: name ?? this.name,
+      roomNumber: roomNumber ?? this.roomNumber,
+      propertyName: propertyName ?? this.propertyName,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      rentAmount: rentAmount ?? this.rentAmount,
+      statusLabel: statusLabel ?? this.statusLabel,
+      statusColor: statusColor ?? this.statusColor,
+      balanceLabel: balanceLabel ?? this.balanceLabel,
+      occupationLabel: occupationLabel ?? this.occupationLabel,
+      contract: contract ?? this.contract,
+      inventory: inventory ?? this.inventory,
+      paymentSummary: paymentSummary ?? this.paymentSummary,
+      notes: notes ?? this.notes,
+      emergencyContact: emergencyContact ?? this.emergencyContact,
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      if (id != null) 'id': id,
-      'name': name,
-      'roomNumber': roomNumber,
-      'propertyName': propertyName,
-      'phone': phone,
-      'email': email,
-      'rentAmount': rentAmount,
-      'statusLabel': statusLabel,
-      'balanceLabel': balanceLabel,
-      'occupationLabel': occupationLabel,
-      'contract': contract.toMap(),
-      'inventory': inventory.toMap(),
-      'paymentSummary': paymentSummary,
-      'notes': notes,
-      'emergencyContact': emergencyContact,
-    };
+  String get initials {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    final letters = parts.map((p) => p[0]).take(2).join();
+    return letters.isEmpty ? '?' : letters.toUpperCase();
   }
+
+  String get firstName {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
+    return parts.length > 1 ? parts.skip(1).join(' ') : '';
+  }
+
+  String get lastName {
+    final parts = name
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((p) => p.isNotEmpty)
+        .toList();
+    return parts.isEmpty ? '' : parts.first;
+  }
+
+  Map<String, dynamic> toMap() => {
+    'name': name,
+    'roomNumber': roomNumber,
+    'propertyName': propertyName,
+    'phone': phone,
+    'email': email,
+    'rentAmount': rentAmount,
+    'statusLabel': statusLabel,
+    'statusColor': statusColor.toARGB32(),
+    'balanceLabel': balanceLabel,
+    'occupationLabel': occupationLabel,
+    'contract': contract.toMap(),
+    'inventory': inventory.toMap(),
+    'paymentSummary': paymentSummary,
+    'notes': notes,
+    'emergencyContact': emergencyContact,
+  };
 }
 
-String? _readOptionalString(Map<String, dynamic>? map, String key) {
-  final value = map?[key];
-  if (value is String && value.trim().isNotEmpty) {
-    return value;
-  }
-  return null;
-}
-
-String _readString(
-  Map<String, dynamic>? map,
-  String key, {
-  required String fallback,
-}) {
-  final value = map?[key];
-  if (value is String && value.trim().isNotEmpty) {
-    return value;
-  }
-  return fallback;
-}
-
-Color _statusColorFor(String status) {
-  switch (status) {
-    case 'Retard':
-      return const Color(0xFFD64545);
-    case 'Paiement attendu':
-      return const Color(0xFFF39C12);
-    default:
-      return const Color(0xFF149954);
-  }
-}
-
-const String tenantsLocalCacheKey = 'tenants_local';
-
-const List<TenantRecord> localPreviewTenants = [
+const localPreviewTenants = [
   TenantRecord(
-    id: 'preview_1',
-    name: 'Afi Mensah',
-    roomNumber: 'A12',
-    propertyName: 'Residence Les Palmiers',
-    phone: '+229 97 45 12 30',
-    email: 'afi.mensah@email.com',
-    rentAmount: '75 000 FCFA',
+    id: 'demo-1',
+    name: 'Ama Mensah',
+    roomNumber: 'A',
+    propertyName: 'Residence Calavi',
+    phone: '+229 01 90 00 00 01',
+    email: 'ama@example.com',
+    rentAmount: '70 000 FCFA',
     statusLabel: 'A jour',
-    statusColor: Color(0xFF149954),
-    balanceLabel: 'Solde regle pour mai',
-    occupationLabel: 'Depuis janvier 2026',
+    statusColor: Color(0xFF3B6D11),
+    balanceLabel: 'Solde a jour',
+    occupationLabel: 'Occupe depuis janvier 2026',
     contract: TenantDocument(
-      title: 'Contrat A12',
-      reference: 'CTR-A12-2026',
-      dateLabel: 'Cree le 5 janvier 2026',
+      title: 'Contrat A',
+      reference: 'CTR-A-2026',
+      dateLabel: '05 janvier 2026',
       state: 'Signe',
     ),
     inventory: TenantDocument(
-      title: 'Etat des lieux A12',
-      reference: 'EDL-A12-2026',
-      dateLabel: 'Fait le 5 janvier 2026',
-      state: 'Complet',
+      title: 'Etat des lieux A',
+      reference: 'EDL-A-2026',
+      dateLabel: '05 janvier 2026',
+      state: 'Signe',
     ),
-    paymentSummary: 'Dernier paiement: 75 000 FCFA le 10 mai',
-    notes: 'Locataire ponctuelle, dossier complet.',
-    emergencyContact: 'Contact urgence: Koffi Mensah - 96 21 44 70',
+    paymentSummary: 'Dernier paiement : 70 000 FCFA',
+    notes: 'Locataire a jour.',
+    emergencyContact: 'Contact urgence : +229 01 90 00 00 02',
   ),
   TenantRecord(
-    id: 'preview_2',
-    name: 'Jean Houngbo',
-    roomNumber: 'B04',
-    propertyName: 'Immeuble Akpakpa Centre',
-    phone: '+229 95 18 44 02',
-    email: 'jean.houngbo@email.com',
-    rentAmount: '60 000 FCFA',
+    id: 'demo-2',
+    name: 'Koffi Ouedraogo',
+    roomNumber: 'B',
+    propertyName: 'Appartement Plateau',
+    phone: '+229 01 91 00 00 01',
+    email: 'koffi@example.com',
+    rentAmount: '80 000 FCFA',
     statusLabel: 'Paiement attendu',
-    statusColor: Color(0xFFF39C12),
-    balanceLabel: 'Paiement attendu cette semaine',
-    occupationLabel: 'Depuis mars 2026',
+    statusColor: Color(0xFF854F0B),
+    balanceLabel: 'Paiement attendu',
+    occupationLabel: 'Occupe depuis fevrier 2026',
     contract: TenantDocument(
-      title: 'Contrat B04',
-      reference: 'CTR-B04-2026',
-      dateLabel: 'Cree le 12 mars 2026',
-      state: 'Signe',
+      title: 'Contrat B',
+      reference: 'CTR-B-2026',
+      dateLabel: '12 fevrier 2026',
+      state: 'A suivre',
     ),
     inventory: TenantDocument(
-      title: 'Etat des lieux B04',
-      reference: 'EDL-B04-2026',
-      dateLabel: 'A verifier',
-      state: 'En cours',
+      title: 'Etat des lieux B',
+      reference: 'EDL-B-2026',
+      dateLabel: '12 fevrier 2026',
+      state: 'Signe',
     ),
-    paymentSummary: 'Prochaine echeance: 60 000 FCFA',
-    notes: 'Relancer si le paiement n arrive pas avant vendredi.',
-    emergencyContact: 'Contact urgence: Mariam Houngbo - 91 32 80 16',
+    paymentSummary: 'Paiement du mois attendu',
+    notes: 'Relance douce a programmer.',
+    emergencyContact: 'Contact urgence non renseigne',
   ),
   TenantRecord(
-    id: 'preview_3',
-    name: 'Nadia Soglo',
-    roomNumber: 'C07',
-    propertyName: 'Villa Fidjrosse',
-    phone: '+229 99 07 63 21',
-    email: 'nadia.soglo@email.com',
-    rentAmount: '120 000 FCFA',
+    id: 'demo-3',
+    name: 'Seraphine Bah',
+    roomNumber: 'C',
+    propertyName: 'Studio Cadjehoun',
+    phone: '+229 01 92 00 00 01',
+    email: 'seraphine@example.com',
+    rentAmount: '65 000 FCFA',
     statusLabel: 'Retard',
-    statusColor: Color(0xFFD64545),
-    balanceLabel: '1 mois de retard',
-    occupationLabel: 'Depuis novembre 2025',
+    statusColor: Color(0xFF993C1D),
+    balanceLabel: 'Relance requise',
+    occupationLabel: 'Occupe depuis mars 2026',
     contract: TenantDocument(
-      title: 'Contrat C07',
-      reference: 'CTR-C07-2025',
-      dateLabel: 'Cree le 2 novembre 2025',
+      title: 'Contrat C',
+      reference: 'CTR-C-2026',
+      dateLabel: '20 mars 2026',
       state: 'Signe',
     ),
     inventory: TenantDocument(
-      title: 'Etat des lieux C07',
-      reference: 'EDL-C07-2025',
-      dateLabel: 'Fait le 2 novembre 2025',
-      state: 'Complet',
+      title: 'Etat des lieux C',
+      reference: 'EDL-C-2026',
+      dateLabel: '20 mars 2026',
+      state: 'Brouillon',
     ),
-    paymentSummary: 'Retard constate sur le mois de mai',
-    notes: 'Prevoir une relance et proposer un echeancier.',
-    emergencyContact: 'Contact urgence: Eric Soglo - 97 80 14 55',
+    paymentSummary: 'Retard de paiement',
+    notes: 'Appeler avant le 5 du mois.',
+    emergencyContact: 'Contact urgence : +229 01 92 00 00 02',
   ),
 ];
 
-class Locataire extends StatefulWidget {
-  const Locataire({super.key});
+class LocatairesScreen extends StatefulWidget {
+  final bool showBottomNav;
+
+  const LocatairesScreen({super.key, this.showBottomNav = true});
 
   @override
-  State<Locataire> createState() => _LocataireState();
+  State<LocatairesScreen> createState() => _LocatairesScreenState();
 }
 
-class _LocataireState extends State<Locataire> {
-  List<TenantRecord> _cachedTenants = [];
+class _LocatairesScreenState extends State<LocatairesScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  final List<TenantRecord> _tenants = List.of(localPreviewTenants);
+  String _query = '';
+
+  List<TenantRecord> get _filtered {
+    if (_query.trim().isEmpty) return _tenants;
+    final q = _query.toLowerCase();
+    return _tenants
+        .where(
+          (t) =>
+              t.name.toLowerCase().contains(q) ||
+              t.roomNumber.toLowerCase().contains(q) ||
+              t.propertyName.toLowerCase().contains(q),
+        )
+        .toList();
+  }
 
   @override
-  void initState() {
-    super.initState();
-    _loadCachedTenants();
-  }
-
-  Future<void> _loadCachedTenants() async {
-    final preferences = await SharedPreferences.getInstance();
-    final encodedTenants =
-        preferences.getStringList(tenantsLocalCacheKey) ?? [];
-    final tenants = <TenantRecord>[];
-
-    for (final encodedTenant in encodedTenants) {
-      try {
-        final decoded = jsonDecode(encodedTenant);
-        if (decoded is Map<String, dynamic>) {
-          tenants.add(TenantRecord.fromMap(decoded));
-        }
-      } catch (error) {
-        debugPrint('Erreur lecture cache locataire: $error');
-      }
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _cachedTenants = tenants;
-    });
-  }
-
-  Future<void> _saveCachedTenants(List<TenantRecord> tenants) async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setStringList(
-      tenantsLocalCacheKey,
-      tenants.map((tenant) => jsonEncode(tenant.toMap())).toList(),
-    );
-  }
-
-  void _replaceCachedTenants(List<TenantRecord> tenants) {
-    if (_sameTenantIds(_cachedTenants, tenants)) {
-      return;
-    }
-
-    setState(() {
-      _cachedTenants = tenants;
-    });
-    _saveCachedTenants(tenants);
-  }
-
-  bool _sameTenantIds(List<TenantRecord> first, List<TenantRecord> second) {
-    if (first.length != second.length) {
-      return false;
-    }
-
-    for (var index = 0; index < first.length; index += 1) {
-      if (first[index].id != second[index].id) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  List<TenantRecord> get _displayTenants {
-    if (_cachedTenants.isEmpty) {
-      return localPreviewTenants;
-    }
-    return _cachedTenants;
-  }
-
-  Future<void> _ajout() async {
-    final newTenant = await Navigator.of(context).push<TenantRecord>(
-      MaterialPageRoute(builder: (context) => const Ajout()),
-    );
-
-    if (newTenant == null || !mounted) {
-      return;
-    }
-
-    final tenantToSave = newTenant.copyWith(
-      id: 'local_${DateTime.now().millisecondsSinceEpoch}',
-    );
-    _replaceCachedTenants([tenantToSave, ..._cachedTenants]);
-    _showSnackBar('${tenantToSave.name} a ete ajoute en local.');
-  }
-
-  Future<void> _deleteTenant(TenantRecord tenant) async {
-    final tenantId = tenant.id;
-
-    if (tenantId == null) {
-      _showSnackBar('Impossible de supprimer ce locataire.');
-      return;
-    }
-
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Supprimer le locataire'),
-          content: Text('Voulez-vous supprimer ${tenant.name} de la liste ?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Annuler'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFD64545),
-              ),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Supprimer'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (shouldDelete != true || !mounted) {
-      return;
-    }
-
-    final updatedCache = _cachedTenants
-        .where((cachedTenant) => cachedTenant.id != tenantId)
-        .toList();
-    _replaceCachedTenants(updatedCache);
-
-    if (!mounted) return;
-    _showSnackBar('${tenant.name} a ete supprime.');
-  }
-
-  Widget _buildLocalTenantBody() {
-    return _TenantList(
-      tenants: _displayTenants,
-      onShowDetails: _showTenantDetails,
-      onDelete: _deleteTenant,
-    );
-  }
-
-  void _showSnackBar(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  void _showTenantDetails(TenantRecord tenant) {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.78,
-          minChildSize: 0.45,
-          maxChildSize: 0.92,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Color(0xFFFFF8EF),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-              ),
-              child: ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-                children: [
-                  Center(
-                    child: Container(
-                      width: 42,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFE2D5C5),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 28,
-                        backgroundColor: const Color(0xFF132238),
-                        child: Text(
-                          tenant.name.characters.first.toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              tenant.name,
-                              style: const TextStyle(
-                                color: Color(0xFF132238),
-                                fontSize: 22,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              tenant.propertyName,
-                              style: const TextStyle(color: Color(0xFF6B7280)),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  _DetailGrid(tenant: tenant),
-                  const SizedBox(height: 16),
-                  _DocumentTile(
-                    icon: Icons.description_outlined,
-                    title: tenant.contract.title,
-                    reference: tenant.contract.reference,
-                    dateLabel: tenant.contract.dateLabel,
-                    state: tenant.contract.state,
-                  ),
-                  const SizedBox(height: 12),
-                  _DocumentTile(
-                    icon: Icons.fact_check_outlined,
-                    title: tenant.inventory.title,
-                    reference: tenant.inventory.reference,
-                    dateLabel: tenant.inventory.dateLabel,
-                    state: tenant.inventory.state,
-                  ),
-                  const SizedBox(height: 16),
-                  _InfoPanel(
-                    title: 'Coordonnees',
-                    lines: [
-                      tenant.phone,
-                      tenant.email,
-                      tenant.emergencyContact,
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  _InfoPanel(
-                    title: 'Suivi',
-                    lines: [
-                      tenant.balanceLabel,
-                      tenant.paymentSummary,
-                      tenant.notes,
-                    ],
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF3E0),
+      backgroundColor: const Color(0xFFF5F0E8),
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'Locataires',
-          style: TextStyle(fontWeight: FontWeight.w800),
+        backgroundColor: const Color(0xFF1A2B5E),
+        foregroundColor: Colors.white,
+        title: const Text('Locataires'),
+        actions: [
+          IconButton(
+            tooltip: 'Ajouter',
+            onPressed: () => _addTenant(context),
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (value) => setState(() => _query = value),
+                decoration: InputDecoration(
+                  hintText: 'Rechercher un locataire',
+                  prefixIcon: const Icon(Icons.search),
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
+            Expanded(child: _buildTenantList()),
+          ],
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _ajout,
-        backgroundColor: const Color(0xFF132238),
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.person_add_alt_1_outlined),
-        label: const Text('Ajouter'),
-      ),
-      body: SafeArea(child: _buildLocalTenantBody()),
+      bottomNavigationBar: widget.showBottomNav
+          ? _BottomNav(
+              currentIndex: 3,
+              onTap: (index) => _goToTab(context, index),
+            )
+          : null,
+    );
+  }
+
+  void _goToTab(BuildContext context, int index) {
+    final routes = [
+      '/accueil',
+      '/mesBiens',
+      '/paiement',
+      '/locataire',
+      '/profil',
+    ];
+    if (index == 3) return;
+    Navigator.pushReplacementNamed(context, routes[index]);
+  }
+
+  Future<void> _addTenant(BuildContext context) async {
+    final result = await Navigator.pushNamed(context, '/ajoutLocataire');
+    final user = FirebaseAuth.instance.currentUser;
+    if (result is TenantRecord && user != null) {
+      try {
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('locataires')
+            .add({...result.toMap(), 'createdAt': FieldValue.serverTimestamp()});
+      } on FirebaseException catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message ?? 'Enregistrement impossible.'),
+            backgroundColor: const Color(0xFF993C1D),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Enregistrement impossible pour le moment.'),
+            backgroundColor: Color(0xFF993C1D),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else if (result is TenantRecord) {
+      setState(() {
+        _tenants.insert(
+          0,
+          result.copyWith(id: DateTime.now().microsecondsSinceEpoch.toString()),
+        );
+      });
+    }
+  }
+
+  Widget _buildTenantList() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return _tenantList(_filtered);
+
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('locataires')
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final tenants = snapshot.hasData
+            ? snapshot.data!.docs
+                  .map(
+                    (doc) => TenantRecord.fromMap(
+                      doc.data() as Map<String, dynamic>,
+                    ).copyWith(id: doc.id),
+                  )
+                  .toList()
+            : <TenantRecord>[];
+        final q = _query.toLowerCase();
+        final filtered = q.isEmpty
+            ? tenants
+            : tenants
+                  .where(
+                    (t) =>
+                        t.name.toLowerCase().contains(q) ||
+                        t.roomNumber.toLowerCase().contains(q) ||
+                        t.propertyName.toLowerCase().contains(q),
+                  )
+                  .toList();
+        return _tenantList(filtered, firestoreUserId: user.uid);
+      },
+    );
+  }
+
+  Widget _tenantList(List<TenantRecord> tenants, {String? firestoreUserId}) {
+    if (tenants.isEmpty) {
+      return const Center(child: Text('Aucun locataire trouve.'));
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      itemCount: tenants.length,
+      separatorBuilder: (context, index) => const SizedBox(height: 10),
+      itemBuilder: (context, index) {
+        final tenant = tenants[index];
+        return _TenantCard(
+          tenant: tenant,
+          onOpen: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => TenantDetailScreen(tenant: tenant),
+            ),
+          ),
+          onDelete: () async {
+            if (firestoreUserId != null && tenant.id != null) {
+              await FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(firestoreUserId)
+                  .collection('locataires')
+                  .doc(tenant.id)
+                  .delete();
+            } else {
+              setState(() => _tenants.removeWhere((t) => t.id == tenant.id));
+            }
+          },
+        );
+      },
     );
   }
 }
 
 class _TenantCard extends StatelessWidget {
   final TenantRecord tenant;
-  final VoidCallback onTap;
+  final VoidCallback onOpen;
   final VoidCallback onDelete;
 
   const _TenantCard({
     required this.tenant,
-    required this.onTap,
+    required this.onOpen,
     required this.onDelete,
   });
 
@@ -669,21 +493,26 @@ class _TenantCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
           padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: const Color(0xFFECE6D6)),
+          ),
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: const Color(0xFFFFE0B2),
+                radius: 23,
+                backgroundColor: tenant.statusColor,
                 child: Text(
-                  tenant.name.characters.first.toUpperCase(),
+                  tenant.initials,
                   style: const TextStyle(
-                    color: Color(0xFF132238),
-                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
@@ -695,44 +524,62 @@ class _TenantCard extends StatelessWidget {
                     Text(
                       tenant.name,
                       style: const TextStyle(
-                        color: Color(0xFF132238),
-                        fontSize: 16,
+                        color: Color(0xFF1A2B5E),
+                        fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 5),
+                    const SizedBox(height: 3),
                     Text(
-                      'Chambre ${tenant.roomNumber} - ${tenant.rentAmount}',
+                      'Chambre ${tenant.roomNumber} - ${tenant.propertyName}',
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Color(0xFF6B7280)),
+                      style: const TextStyle(color: Color(0xFF7A6F52)),
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: tenant.statusColor.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        tenant.statusLabel,
-                        style: TextStyle(
-                          color: tenant.statusColor,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w800,
-                        ),
+                    const SizedBox(height: 6),
+                    Text(
+                      tenant.rentAmount,
+                      style: const TextStyle(
+                        color: Color(0xFF1A2B5E),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                   ],
                 ),
               ),
-              IconButton(
-                tooltip: 'Supprimer',
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
-                color: const Color(0xFFD64545),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: tenant.statusColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      tenant.statusLabel,
+                      style: TextStyle(
+                        color: tenant.statusColor,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Supprimer',
+                    onPressed: onDelete,
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: Color(0xFF993C1D),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -742,112 +589,78 @@ class _TenantCard extends StatelessWidget {
   }
 }
 
-class _TenantList extends StatelessWidget {
-  final List<TenantRecord> tenants;
-  final void Function(TenantRecord tenant) onShowDetails;
-  final void Function(TenantRecord tenant) onDelete;
-
-  const _TenantList({
-    required this.tenants,
-    required this.onShowDetails,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-      itemCount: tenants.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
-        final tenant = tenants[index];
-        return _TenantCard(
-          tenant: tenant,
-          onTap: () => onShowDetails(tenant),
-          onDelete: () => onDelete(tenant),
-        );
-      },
-    );
-  }
-}
-
-class _DetailGrid extends StatelessWidget {
+class TenantDetailScreen extends StatelessWidget {
   final TenantRecord tenant;
 
-  const _DetailGrid({required this.tenant});
+  const TenantDetailScreen({super.key, required this.tenant});
 
   @override
   Widget build(BuildContext context) {
-    return GridView.count(
-      crossAxisCount: 2,
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      childAspectRatio: 1.55,
-      children: [
-        _MetricTile(
-          icon: Icons.meeting_room_outlined,
-          label: 'Chambre',
-          value: tenant.roomNumber,
-        ),
-        _MetricTile(
-          icon: Icons.payments_outlined,
-          label: 'Loyer',
-          value: tenant.rentAmount,
-        ),
-        _MetricTile(
-          icon: Icons.event_available_outlined,
-          label: 'Occupation',
-          value: tenant.occupationLabel,
-        ),
-        _MetricTile(
-          icon: Icons.verified_outlined,
-          label: 'Statut',
-          value: tenant.statusLabel,
-        ),
-      ],
-    );
-  }
-}
-
-class _MetricTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String value;
-
-  const _MetricTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F0E8),
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1A2B5E),
+        foregroundColor: Colors.white,
+        title: Text(tenant.name),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      body: ListView(
+        padding: const EdgeInsets.all(16),
         children: [
-          Icon(icon, color: const Color(0xFFE67E22), size: 22),
-          const Spacer(),
-          Text(
-            label,
-            style: const TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+          _DetailHeader(tenant: tenant),
+          const SizedBox(height: 14),
+          _DetailSection(
+            title: 'Informations',
+            children: [
+              _InfoRow(label: 'Nom', value: tenant.lastName),
+              _InfoRow(
+                label: 'Prenom',
+                value: tenant.firstName.isEmpty
+                    ? 'Non renseigne'
+                    : tenant.firstName,
+              ),
+              _InfoRow(label: 'Nom complet', value: tenant.name),
+              _InfoRow(label: 'Numero de chambre', value: tenant.roomNumber),
+              _InfoRow(label: 'Bien', value: tenant.propertyName),
+              _InfoRow(label: 'Loyer', value: tenant.rentAmount),
+              _InfoRow(label: 'Telephone', value: tenant.phone),
+              _InfoRow(label: 'Email', value: tenant.email),
+            ],
           ),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Color(0xFF132238),
-              fontWeight: FontWeight.w800,
-            ),
+          const SizedBox(height: 12),
+          _DetailSection(
+            title: 'Dossier',
+            children: [
+              _DocumentRow(
+                icon: Icons.description_outlined,
+                title: tenant.contract.title.isEmpty
+                    ? 'Contrat ${tenant.roomNumber}'
+                    : tenant.contract.title,
+                reference: tenant.contract.reference,
+                state: tenant.contract.state,
+                dateLabel: tenant.contract.dateLabel,
+              ),
+              _DocumentRow(
+                icon: Icons.fact_check_outlined,
+                title: tenant.inventory.title.isEmpty
+                    ? 'Etat des lieux ${tenant.roomNumber}'
+                    : tenant.inventory.title,
+                reference: tenant.inventory.reference,
+                state: tenant.inventory.state,
+                dateLabel: tenant.inventory.dateLabel,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _DetailSection(
+            title: 'Suivi',
+            children: [
+              _InfoRow(label: 'Statut', value: tenant.statusLabel),
+              _InfoRow(label: 'Solde', value: tenant.balanceLabel),
+              _InfoRow(label: 'Occupation', value: tenant.occupationLabel),
+              _InfoRow(label: 'Paiement', value: tenant.paymentSummary),
+              _InfoRow(label: 'Urgence', value: tenant.emergencyContact),
+              _InfoRow(label: 'Notes', value: tenant.notes),
+            ],
           ),
         ],
       ),
@@ -855,60 +668,52 @@ class _MetricTile extends StatelessWidget {
   }
 }
 
-class _DocumentTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String reference;
-  final String dateLabel;
-  final String state;
+class _DetailHeader extends StatelessWidget {
+  final TenantRecord tenant;
 
-  const _DocumentTile({
-    required this.icon,
-    required this.title,
-    required this.reference,
-    required this.dateLabel,
-    required this.state,
-  });
+  const _DetailHeader({required this.tenant});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xFF1A2B5E),
+        borderRadius: BorderRadius.circular(14),
       ),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF132238)),
-          const SizedBox(width: 12),
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: tenant.statusColor,
+            child: Text(
+              tenant.initials,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  tenant.name,
                   style: const TextStyle(
-                    color: Color(0xFF132238),
-                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '$reference - $dateLabel',
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 12,
-                  ),
+                  'Chambre ${tenant.roomNumber} - ${tenant.rentAmount}',
+                  style: const TextStyle(color: Color(0xFFFDF6DC)),
                 ),
               ],
-            ),
-          ),
-          Text(
-            state,
-            style: const TextStyle(
-              color: Color(0xFFE67E22),
-              fontWeight: FontWeight.w800,
             ),
           ),
         ],
@@ -917,20 +722,20 @@ class _DocumentTile extends StatelessWidget {
   }
 }
 
-class _InfoPanel extends StatelessWidget {
+class _DetailSection extends StatelessWidget {
   final String title;
-  final List<String> lines;
+  final List<Widget> children;
 
-  const _InfoPanel({required this.title, required this.lines});
+  const _DetailSection({required this.title, required this.children});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFECE6D6)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -938,106 +743,197 @@ class _InfoPanel extends StatelessWidget {
           Text(
             title,
             style: const TextStyle(
-              color: Color(0xFF132238),
-              fontWeight: FontWeight.w800,
+              color: Color(0xFF1A2B5E),
+              fontSize: 15,
+              fontWeight: FontWeight.w900,
             ),
           ),
-          const SizedBox(height: 8),
-          for (final line in lines) ...[
-            Text(line, style: const TextStyle(color: Color(0xFF526072))),
-            if (line != lines.last) const SizedBox(height: 5),
-          ],
+          const SizedBox(height: 10),
+          ...children,
         ],
       ),
     );
   }
 }
 
-class _EmptyTenants extends StatelessWidget {
-  final VoidCallback onAdd;
+class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
 
-  const _EmptyTenants({required this.onAdd});
+  const _InfoRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(
-              Icons.people_alt_outlined,
-              size: 64,
-              color: Color(0xFFE67E22),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'Aucun locataire pour le moment',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF132238),
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
+    final display = value.trim().isEmpty ? 'Non renseigne' : value.trim();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 132,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF7A6F52),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              'Ajoutez votre premier locataire pour commencer le suivi.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF6B7280)),
-            ),
-            const SizedBox(height: 18),
-            FilledButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.person_add_alt_1_outlined),
-              label: const Text('Ajouter'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AuthRequired extends StatelessWidget {
-  const _AuthRequired();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Padding(
-        padding: EdgeInsets.all(24),
-        child: Text(
-          'Connectez-vous pour voir et enregistrer vos locataires.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: Color(0xFF132238),
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
           ),
-        ),
+          Expanded(
+            child: Text(
+              display,
+              style: const TextStyle(
+                color: Color(0xFF1A2B5E),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _ErrorState extends StatelessWidget {
-  final String message;
+class _DocumentRow extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String reference;
+  final String state;
+  final String dateLabel;
 
-  const _ErrorState({required this.message});
+  const _DocumentRow({
+    required this.icon,
+    required this.title,
+    required this.reference,
+    required this.state,
+    required this.dateLabel,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          'Impossible de charger les locataires.\n$message',
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: Color(0xFFD64545)),
-        ),
+    final details = [
+      if (reference.trim().isNotEmpty) reference,
+      if (dateLabel.trim().isNotEmpty) dateLabel,
+    ].join(' - ');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFDF6DC),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: const Color(0xFF1A2B5E)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF1A2B5E),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                if (details.isNotEmpty) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    details,
+                    style: const TextStyle(
+                      color: Color(0xFF7A6F52),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              state.trim().isEmpty ? 'A suivre' : state,
+              style: const TextStyle(
+                color: Color(0xFF1A2B5E),
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+}
+
+class _BottomNav extends StatelessWidget {
+  final int currentIndex;
+  final ValueChanged<int> onTap;
+
+  const _BottomNav({required this.currentIndex, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return BottomNavigationBar(
+      type: BottomNavigationBarType.fixed,
+      currentIndex: currentIndex,
+      selectedItemColor: const Color(0xFF1A2B5E),
+      unselectedItemColor: const Color(0xFF7A6F52),
+      backgroundColor: Colors.white,
+      onTap: onTap,
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home_outlined),
+          label: 'Accueil',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.business_outlined),
+          label: 'Biens',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.payments_outlined),
+          label: 'Paiement',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.people_outline),
+          label: 'Locataires',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          label: 'Profil',
+        ),
+      ],
+    );
+  }
+}
+
+Color? _colorFromValue(dynamic value) {
+  if (value is int) return Color(value);
+  if (value is String) {
+    final cleaned = value.replaceFirst('#', '').replaceFirst('0x', '');
+    final parsed = int.tryParse(cleaned, radix: 16);
+    if (parsed != null) {
+      return Color(cleaned.length <= 6 ? 0xFF000000 | parsed : parsed);
+    }
+  }
+  return null;
+}
+
+Color _statusColorFor(String status) {
+  switch (status) {
+    case 'Retard':
+      return const Color(0xFF993C1D);
+    case 'Paiement attendu':
+      return const Color(0xFF854F0B);
+    default:
+      return const Color(0xFF3B6D11);
   }
 }

@@ -1,577 +1,429 @@
-import 'dart:convert';
-
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:gestion_locative/Dashboard.dart';
 import 'package:gestion_locative/locataire.dart';
-import 'package:gestion_locative/paiement.dart';
-import 'package:gestion_locative/profil.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-class Document extends StatefulWidget {
+class Document extends StatelessWidget {
   const Document({super.key});
 
-  @override
-  State<Document> createState() => _DocumentState();
-}
-
-class _DocumentState extends State<Document> {
-  List<TenantRecord> _tenants = localPreviewTenants;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTenantDocuments();
-  }
-
-  Future<void> _loadTenantDocuments() async {
-    final preferences = await SharedPreferences.getInstance();
-    final encodedTenants =
-        preferences.getStringList(tenantsLocalCacheKey) ?? [];
-    final tenants = <TenantRecord>[];
-
-    for (final encodedTenant in encodedTenants) {
-      try {
-        final decoded = jsonDecode(encodedTenant);
-        if (decoded is Map<String, dynamic>) {
-          tenants.add(TenantRecord.fromMap(decoded));
-        }
-      } catch (error) {
-        debugPrint('Erreur lecture documents locataires: $error');
-      }
-    }
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _tenants = tenants.isEmpty ? localPreviewTenants : tenants;
-    });
-  }
-
-  List<DocumentEntry> get _contractDocuments {
-    return _tenants.map((tenant) {
-      return DocumentEntry(
-        title: tenant.contract.title,
-        subtitle: '${tenant.name} - ${tenant.propertyName}',
-        date: tenant.contract.dateLabel,
-        state: tenant.contract.state,
-        icon: Icons.description_outlined,
-        tint: const Color(0xFFE8F1FF),
-      );
-    }).toList();
-  }
-
-  List<DocumentEntry> get _inventoryDocuments {
-    return _tenants.map((tenant) {
-      return DocumentEntry(
-        title: tenant.inventory.title,
-        subtitle: '${tenant.name} - Chambre ${tenant.roomNumber}',
-        date: tenant.inventory.dateLabel,
-        state: tenant.inventory.state,
-        icon: Icons.home_work_outlined,
-        tint: const Color(0xFFFFF5E6),
-      );
-    }).toList();
-  }
+  static const _navy = Color(0xFF1A2B5E);
+  static const _cream = Color(0xFFF2C94C);
+  static const _creamLight = Color(0xFFFDF6DC);
+  static const _bgPage = Color(0xFFF5F0E8);
+  static const _border = Color(0xFFECE6D6);
+  static const _textMuted = Color(0xFF7A6F52);
 
   @override
   Widget build(BuildContext context) {
-    final contractDocuments = _contractDocuments;
-    final inventoryDocuments = _inventoryDocuments;
+    final user = FirebaseAuth.instance.currentUser;
 
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF3E0),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'Documents',
-          style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () {},
-            icon: const Icon(Icons.notifications_none_outlined),
+      backgroundColor: _bgPage,
+      body: Column(
+        children: [
+          _buildHeader(),
+          Expanded(
+            child: user == null
+                ? _buildContent(context, const [])
+                : StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .collection('locataires')
+                        .orderBy('createdAt', descending: true)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const Center(
+                          child: Text('Impossible de charger les documents.'),
+                        );
+                      }
+
+                      final tenants = snapshot.hasData
+                          ? snapshot.data!.docs
+                                .map(
+                                  (doc) => TenantRecord.fromMap(
+                                    doc.data() as Map<String, dynamic>,
+                                  ).copyWith(id: doc.id),
+                                )
+                                .toList()
+                          : <TenantRecord>[];
+
+                      return _buildContent(context, tenants);
+                    },
+                  ),
           ),
         ],
       ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const _DocumentHero(),
-              const SizedBox(height: 18),
-              _DocumentOverviewRow(
-                contractCount: contractDocuments.length,
-                inventoryCount: inventoryDocuments.length,
-              ),
-              const SizedBox(height: 18),
-              _DocumentSection(
-                title: 'Contrats',
-                subtitle: 'Baux actifs, renouvellements et signatures a suivre',
-                accentColor: const Color(0xFF2B7FFF),
-                items: contractDocuments,
-              ),
-              const SizedBox(height: 18),
-              _DocumentSection(
-                title: 'Etats des lieux',
-                subtitle: 'Entrees, sorties et controles de chambres',
-                accentColor: const Color(0xFFF39C12),
-                items: inventoryDocuments,
-              ),
-              const SizedBox(height: 18),
-              const _UploadPanel(),
-            ],
-          ),
-        ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: 2,
-        selectedItemColor: Colors.blue,
-        unselectedItemColor: Colors.grey,
-        backgroundColor: Colors.white,
-        onTap: (int index) {
-          if (index == 0) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const Dashboard()),
-            );
-          } else if (index == 1) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const Paiement()),
-            );
-          } else if (index == 3) {
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (_) => const Profil()),
-            );
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.money), label: 'Paiement'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.document_scanner),
-            label: 'Document',
-          ),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
-      ),
+      bottomNavigationBar: _buildBottomNav(context),
     );
   }
-}
 
-class DocumentEntry {
-  final String title;
-  final String subtitle;
-  final String date;
-  final String state;
-  final IconData icon;
-  final Color tint;
-
-  const DocumentEntry({
-    required this.title,
-    required this.subtitle,
-    required this.date,
-    required this.state,
-    required this.icon,
-    required this.tint,
-  });
-}
-
-class _DocumentHero extends StatelessWidget {
-  const _DocumentHero();
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF102A43), Color(0xFF1F6FEB), Color(0xFF63B3ED)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-      ),
+      color: _navy,
+      padding: const EdgeInsets.fromLTRB(16, 52, 16, 20),
       child: const Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Espace documentaire',
+            'Documents',
             style: TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.bold,
               color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
             ),
           ),
           SizedBox(height: 8),
           Text(
-            'Retrouvez vos contrats, vos etats des lieux et vos fichiers scannes dans un seul espace clair.',
-            style: TextStyle(
-              color: Color(0xFFDDEAF8),
-              fontSize: 14,
-              height: 1.4,
-            ),
+            'Contrats, etats des lieux et dossiers scannes.',
+            style: TextStyle(fontSize: 12, color: Color(0xFFB0BAD0)),
           ),
         ],
       ),
     );
   }
-}
 
-class _DocumentOverviewRow extends StatelessWidget {
-  final int contractCount;
-  final int inventoryCount;
+  Widget _buildContent(BuildContext context, List<TenantRecord> tenants) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildStats(tenants.length),
+          const SizedBox(height: 18),
+          _sectionTitle(
+            'Documents par locataire',
+            'Contrat et etat des lieux lies a chaque dossier',
+          ),
+          const SizedBox(height: 10),
+          if (tenants.isEmpty)
+            _emptyCard('Aucun document locataire enregistre')
+          else
+            ...tenants.map((tenant) => _tenantDocumentCard(context, tenant)),
+          const SizedBox(height: 20),
+          _scanButton(context),
+        ],
+      ),
+    );
+  }
 
-  const _DocumentOverviewRow({
-    required this.contractCount,
-    required this.inventoryCount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildStats(int tenantCount) {
     return Row(
       children: [
         Expanded(
-          child: _MiniInfoCard(
-            title: 'Contrats',
-            value: '$contractCount',
-            subtitle: '$contractCount locataires',
-            icon: Icons.description_outlined,
-            color: const Color(0xFFE8F1FF),
-            iconColor: const Color(0xFF2B7FFF),
-          ),
+          child: _statCard('$tenantCount', 'Contrats', '$tenantCount actifs'),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _MiniInfoCard(
-            title: 'Etats des lieux',
-            value: '$inventoryCount',
-            subtitle: '$inventoryCount locataires',
-            icon: Icons.home_work_outlined,
-            color: const Color(0xFFFFF5E6),
-            iconColor: const Color(0xFFF39C12),
-          ),
+          child: _statCard('$tenantCount', 'Etats des lieux', 'Dossiers lies'),
         ),
       ],
     );
   }
-}
 
-class _MiniInfoCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String subtitle;
-  final IconData icon;
-  final Color color;
-  final Color iconColor;
-
-  const _MiniInfoCard({
-    required this.title,
-    required this.value,
-    required this.subtitle,
-    required this.icon,
-    required this.color,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _statCard(String value, String title, String sub) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+              color: _navy,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: _navy,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(sub, style: const TextStyle(color: _textMuted, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _sectionTitle(String title, String sub) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: _navy,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(sub, style: const TextStyle(fontSize: 12, color: _textMuted)),
+      ],
+    );
+  }
+
+  Widget _tenantDocumentCard(BuildContext context, TenantRecord tenant) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          InkWell(
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => TenantDetailScreen(tenant: tenant),
+              ),
+            ),
+            borderRadius: BorderRadius.circular(12),
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 22,
+                    backgroundColor: tenant.statusColor,
+                    child: Text(
+                      tenant.initials,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          tenant.name,
+                          style: const TextStyle(
+                            color: _navy,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 15,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          'Chambre ${tenant.roomNumber} - ${tenant.rentAmount}',
+                          style: const TextStyle(
+                            color: _textMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right_rounded, color: _textMuted),
+                ],
+              ),
+            ),
+          ),
+          _contractCard(tenant),
+          _inventoryCard(tenant),
+        ],
+      ),
+    );
+  }
+
+  Widget _contractCard(TenantRecord tenant) {
+    final state = tenant.contract.state.isEmpty
+        ? 'Nouveau'
+        : tenant.contract.state;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: _navy,
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: color,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Icon(icon, color: iconColor),
-          ),
+          const Icon(Icons.description_outlined, color: _cream),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
+                  tenant.contract.title.isEmpty
+                      ? 'Contrat ${tenant.roomNumber}'
+                      : tenant.contract.title,
                   style: const TextStyle(
-                    color: Color(0xFF607086),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
-                  value,
+                  '${tenant.name} - ${tenant.propertyName}',
                   style: const TextStyle(
-                    color: Color(0xFF132238),
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Color(0xFF7D8CA0),
+                    color: Color(0xFFD0D8F0),
                     fontSize: 12,
                   ),
                 ),
               ],
             ),
           ),
+          _badge(state),
         ],
       ),
     );
   }
-}
 
-class _DocumentSection extends StatelessWidget {
-  final String title;
-  final String subtitle;
-  final Color accentColor;
-  final List<DocumentEntry> items;
-
-  const _DocumentSection({
-    required this.title,
-    required this.subtitle,
-    required this.accentColor,
-    required this.items,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _inventoryCard(TenantRecord tenant) {
+    final state = tenant.inventory.state.isEmpty
+        ? 'A faire'
+        : tenant.inventory.state;
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      margin: EdgeInsets.zero,
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: accentColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14),
+          const Icon(Icons.fact_check_outlined, color: _navy),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  tenant.inventory.title.isEmpty
+                      ? 'Etat des lieux ${tenant.roomNumber}'
+                      : tenant.inventory.title,
+                  style: const TextStyle(
+                    color: _navy,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                child: Icon(Icons.folder_copy_outlined, color: accentColor),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: Color(0xFF132238),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: Color(0xFF6C7B8D),
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 4),
+                Text(
+                  tenant.name,
+                  style: const TextStyle(color: _textMuted, fontSize: 12),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ...items.map(
-            (item) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _DocumentCard(entry: item),
+              ],
             ),
           ),
+          _badge(state),
         ],
       ),
     );
   }
-}
 
-class _DocumentCard extends StatelessWidget {
-  final DocumentEntry entry;
-
-  const _DocumentCard({required this.entry});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _badge(String label) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: entry.tint,
+        color: _creamLight,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 24,
-            backgroundColor: Colors.white,
-            child: Icon(entry.icon, color: const Color(0xFF132238)),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  entry.title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF132238),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  entry.subtitle,
-                  style: const TextStyle(color: Color(0xFF526072)),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  entry.date,
-                  style: const TextStyle(color: Color(0xFF6C7B8D)),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Text(
-              entry.state,
-              style: const TextStyle(
-                color: Color(0xFF132238),
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _UploadPanel extends StatefulWidget {
-  const _UploadPanel();
-
-  @override
-  State<_UploadPanel> createState() => _UploadPanelState();
-}
-
-class _UploadPanelState extends State<_UploadPanel> {
-  String? _lastScanLabel;
-
-  Future<void> openScan() async {
-    final label = await Navigator.of(context).pushNamed<String>('/scan');
-
-    if (label == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _lastScanLabel = label;
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Document scanne ajoute.'),
-        duration: Duration(seconds: 2),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: _navy,
+          fontWeight: FontWeight.bold,
+          fontSize: 11,
+        ),
       ),
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
+  Widget _emptyCard(String label) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: const Color(0xFF132238),
-        borderRadius: BorderRadius.circular(24),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Scanner ou ajouter un document',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
+      child: Text(label, style: const TextStyle(color: _textMuted)),
+    );
+  }
+
+  Widget _scanButton(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: ElevatedButton.icon(
+        onPressed: () => Navigator.pushNamed(context, '/scan'),
+        icon: const Icon(Icons.document_scanner_outlined),
+        label: const Text('Scanner'),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: _cream,
+          foregroundColor: _navy,
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Pour l\'instant les actions sont pretes cote interface. Vous pourrez ensuite les brancher a l\'upload ou au scanner.',
-            style: TextStyle(color: Color(0xFFD4DFEA), height: 1.4),
-          ),
-          const SizedBox(height: 18),
-          Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              ElevatedButton(
-                onPressed: openScan,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: const Color(0xFF132238),
-                ),
-                child: const Text('Scanner'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () {},
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: const BorderSide(color: Color(0xFF5C7FA3)),
-                ),
-                icon: const Icon(Icons.send_outlined),
-                label: const Text('Envoyer'),
-              ),
-            ],
-          ),
-          if (_lastScanLabel != null) ...[
-            const SizedBox(height: 14),
-            Text(
-              _lastScanLabel!,
-              style: const TextStyle(
-                color: Color(0xFFD4DFEA),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildBottomNav(BuildContext context) {
+    return BottomNavigationBar(
+      type: BottomNavigationBarType.fixed,
+      currentIndex: 2,
+      selectedItemColor: _navy,
+      unselectedItemColor: _textMuted,
+      backgroundColor: Colors.white,
+      onTap: (i) {
+        final routes = [
+          '/accueil',
+          '/mesBiens',
+          '/paiement',
+          '/locataire',
+          '/profil',
+        ];
+        Navigator.pushReplacementNamed(context, routes[i]);
+      },
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.home_outlined),
+          label: 'Accueil',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.business_outlined),
+          label: 'Biens',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.payments_outlined),
+          label: 'Paiement',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.people_outline),
+          label: 'Locataires',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person_outline),
+          label: 'Profil',
+        ),
+      ],
     );
   }
 }
