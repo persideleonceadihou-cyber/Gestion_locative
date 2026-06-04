@@ -1,5 +1,7 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:gestion_locative/mesBiens.dart';
 import 'package:gestion_locative/conect.dart';
 import 'package:gestion_locative/firebase_options.dart';
@@ -14,9 +16,11 @@ import 'package:gestion_locative/home.dart';
 import 'package:gestion_locative/ajoutMaison.dart';
 import 'package:gestion_locative/ajout.dart';
 import 'package:gestion_locative/Accueil.dart';
+import 'package:gestion_locative/tenant_payment_page.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) usePathUrlStrategy();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
@@ -34,10 +38,28 @@ class MyApp extends StatelessWidget {
         useMaterial3: true,
       ),
       home: const Home(),
+      // Gestion des routes dynamiques (ex: /pay?uid=...&nom=...)
+      onGenerateRoute: (settings) {
+        final name = settings.name ?? '';
+        final uri = Uri.tryParse(name);
+        if (uri != null && uri.path == '/pay') {
+          final p = uri.queryParameters;
+          return MaterialPageRoute(
+            builder: (_) => TenantPaymentPage(
+              uid: p['uid'] ?? '',
+              tenantId: p['tenantId'] ?? '',
+              nom: p['nom'] ?? '',
+              chambre: p['chambre'] ?? '',
+              montant: p['montant'] ?? '0',
+            ),
+            settings: settings,
+          );
+        }
+        return null;
+      },
       routes: {
         '/connect': (context) => const Connect(),
         '/accueil': (context) => Accueil(userName: "Utilisateur"),
-
         '/mesBiens': (context) => const MesBiens(),
         '/paiement': (context) => const Paiement(),
         '/document': (context) => const Document(),

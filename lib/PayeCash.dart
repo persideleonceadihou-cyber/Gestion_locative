@@ -6,6 +6,7 @@ import 'package:gestion_locative/locataire.dart';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class PayeCash extends StatefulWidget {
   const PayeCash({super.key});
@@ -27,10 +28,14 @@ class _PayeCashState extends State<PayeCash> {
 
   // ── Génère le lien de paiement unique pour un locataire ──
   String _paymentLink(TenantRecord tenant) {
-    final encoded = Uri.encodeFull(tenant.name);
-    final room = Uri.encodeFull(tenant.roomNumber);
-    final amount = tenant.rentAmount.replaceAll(RegExp(r'[^0-9]'), '');
-    return 'https://gestion-locative-3f02c.web.app/pay?nom=$encoded&chambre=$room&montant=$amount';
+    final nom = Uri.encodeFull(tenant.name);
+    final chambre = Uri.encodeFull(tenant.roomNumber);
+    final montant = tenant.rentAmount.replaceAll(RegExp(r'[^0-9]'), '');
+    final uid = Uri.encodeFull(
+        FirebaseAuth.instance.currentUser?.uid ?? '');
+    final tenantId = Uri.encodeFull(tenant.id ?? '');
+    return 'https://gestion-locative-3f02c.web.app/pay'
+        '?uid=$uid&tenantId=$tenantId&nom=$nom&chambre=$chambre&montant=$montant';
   }
 
   void _copyLink(TenantRecord tenant) {
@@ -43,6 +48,57 @@ class _PayeCashState extends State<PayeCash> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
+  }
+
+  // Lien général (sans locataire pré-sélectionné)
+  String _generalLink() {
+    final uid = Uri.encodeFull(
+        FirebaseAuth.instance.currentUser?.uid ?? '');
+    return 'https://gestion-locative-3f02c.web.app/pay?uid=$uid';
+  }
+
+  void _copyGeneralLink() {
+    Clipboard.setData(ClipboardData(text: _generalLink()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Lien général copié !'),
+        backgroundColor: Color(0xFF149954),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _shareGeneralWhatsApp() async {
+    final link = _generalLink();
+    final msg = Uri.encodeComponent(
+        'Bonjour, voici le lien pour payer votre loyer en ligne : $link');
+    final url = Uri.parse('https://wa.me/?text=$msg');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      _copyGeneralLink();
+    }
+  }
+
+  Future<void> _shareWhatsApp(TenantRecord tenant) async {
+    final link = _paymentLink(tenant);
+    final msg = Uri.encodeComponent(
+        'Bonjour ${tenant.name}, voici votre lien pour payer votre loyer en ligne : $link');
+    final url = Uri.parse('https://wa.me/?text=$msg');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      _copyLink(tenant);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Lien copié (WhatsApp non disponible)'),
+            backgroundColor: Color(0xFF607086),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _launchPaymentAPI(String provider, TenantRecord tenant) async {
@@ -176,8 +232,12 @@ class _PayeCashState extends State<PayeCash> {
                   onSelectTenant: (t) =>
                       setState(() => _selectedTenant = t),
                   onCopyLink: _copyLink,
+                  onShareWhatsApp: _shareWhatsApp,
                   onPay: _launchPaymentAPI,
                   paymentLink: _paymentLink,
+                  generalLink: _generalLink(),
+                  onCopyGeneralLink: _copyGeneralLink,
+                  onShareGeneralWhatsApp: _shareGeneralWhatsApp,
                 ),
         ),
       ),
@@ -197,8 +257,12 @@ class _PayCashBody extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<TenantRecord> onSelectTenant;
   final ValueChanged<TenantRecord> onCopyLink;
+  final ValueChanged<TenantRecord> onShareWhatsApp;
   final Function(String, TenantRecord) onPay;
   final String Function(TenantRecord) paymentLink;
+  final String generalLink;
+  final VoidCallback onCopyGeneralLink;
+  final VoidCallback onShareGeneralWhatsApp;
 
   const _PayCashBody({
     required this.currentUser,
@@ -208,8 +272,12 @@ class _PayCashBody extends StatelessWidget {
     required this.onSearchChanged,
     required this.onSelectTenant,
     required this.onCopyLink,
+    required this.onShareWhatsApp,
     required this.onPay,
     required this.paymentLink,
+    required this.generalLink,
+    required this.onCopyGeneralLink,
+    required this.onShareGeneralWhatsApp,
   });
 
   @override
@@ -287,6 +355,14 @@ class _PayCashBody extends StatelessWidget {
             ),
             const SizedBox(height: 18),
 
+            // ── Lien Général ──────────────────────────
+            _GeneralLinkBanner(
+              link: generalLink,
+              onCopy: onCopyGeneralLink,
+              onWhatsApp: onShareGeneralWhatsApp,
+            ),
+            const SizedBox(height: 18),
+
             // ── Barre de recherche ──
             Container(
               decoration: BoxDecoration(
@@ -361,6 +437,7 @@ class _PayCashBody extends StatelessWidget {
                     link: paymentLink(tenant),
                     onSelect: () => onSelectTenant(tenant),
                     onCopyLink: () => onCopyLink(tenant),
+                    onShareWhatsApp: () => onShareWhatsApp(tenant),
                     onPay: (provider) => onPay(provider, tenant),
                   )),
           ],
@@ -380,6 +457,7 @@ class _TenantPayCard extends StatelessWidget {
   final String link;
   final VoidCallback onSelect;
   final VoidCallback onCopyLink;
+  final VoidCallback onShareWhatsApp;
   final ValueChanged<String> onPay;
 
   const _TenantPayCard({
@@ -388,6 +466,7 @@ class _TenantPayCard extends StatelessWidget {
     required this.link,
     required this.onSelect,
     required this.onCopyLink,
+    required this.onShareWhatsApp,
     required this.onPay,
   });
 
@@ -512,54 +591,101 @@ class _TenantPayCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFFF0F4FA),
                   borderRadius: BorderRadius.circular(14),
-                  border:
-                      Border.all(color: const Color(0xFFDDEAF8)),
+                  border: Border.all(color: const Color(0xFFDDEAF8)),
                 ),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.link_rounded,
-                      color: Color(0xFF1F6FEB),
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        link,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Color(0xFF607086),
-                          fontSize: 11,
+                    // URL tronquée
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.link_rounded,
+                          color: Color(0xFF1F6FEB),
+                          size: 18,
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: onCopyLink,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1F6FEB),
-                          borderRadius: BorderRadius.circular(10),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            link,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF607086),
+                              fontSize: 11,
+                            ),
+                          ),
                         ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.copy_rounded,
-                                color: Colors.white, size: 13),
-                            SizedBox(width: 4),
-                            Text(
-                              'Copier',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    // Boutons WhatsApp + Copier
+                    Row(
+                      children: [
+                        // WhatsApp
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: onShareWhatsApp,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF25D366),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.chat_rounded,
+                                      color: Colors.white, size: 14),
+                                  SizedBox(width: 5),
+                                  Text(
+                                    'WhatsApp',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        // Copier
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: onCopyLink,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1F6FEB),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.copy_rounded,
+                                      color: Colors.white, size: 14),
+                                  SizedBox(width: 5),
+                                  Text(
+                                    'Copier',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -749,6 +875,153 @@ class _EmptySearch extends StatelessWidget {
           Text(
             'Aucun locataire trouvé.',
             style: TextStyle(color: Color(0xFF607086)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// Bannière Lien Général
+// ─────────────────────────────────────────────
+class _GeneralLinkBanner extends StatelessWidget {
+  final String link;
+  final VoidCallback onCopy;
+  final VoidCallback onWhatsApp;
+
+  const _GeneralLinkBanner({
+    required this.link,
+    required this.onCopy,
+    required this.onWhatsApp,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0D1B2E), Color(0xFF1A4480)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.public_rounded, color: Colors.white, size: 18),
+              SizedBox(width: 8),
+              Text(
+                'Lien de paiement général',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Envoyez ce lien unique à n\'importe quel locataire.\nIl choisira son nom et paiera son loyer.',
+            style: TextStyle(
+              color: Color(0xFFABC4E0),
+              fontSize: 12,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 12),
+          // URL tronquée
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.link_rounded,
+                    color: Color(0xFF63B3ED), size: 14),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    link,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                        color: Color(0xFFDDEAF8), fontSize: 11),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: onWhatsApp,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF25D366),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chat_rounded,
+                            color: Colors.white, size: 15),
+                        SizedBox(width: 6),
+                        Text(
+                          'WhatsApp',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: onCopy,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.copy_rounded,
+                            color: Colors.white, size: 15),
+                        SizedBox(width: 6),
+                        Text(
+                          'Copier',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
