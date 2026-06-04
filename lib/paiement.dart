@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:gestion_locative/locataire.dart';
+import 'package:url_launcher/url_launcher.dart';
 // import 'package:gestion_locative/mesBiens.dart';
 // import 'package:gestion_locative/locataire.dart';
 // import 'package:gestion_locative/document.dart';
@@ -154,6 +156,137 @@ final _demoPayments = <_Payment>[
 
 int _amountFromText(String value) {
   return int.tryParse(value.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+}
+
+// ─────────────────────────────────────────────
+// Carte Lien Général (réutilisable)
+// ─────────────────────────────────────────────
+class _GeneralLinkCard extends StatelessWidget {
+  final String link;
+  final String adminUid;
+
+  const _GeneralLinkCard({required this.link, required this.adminUid});
+
+  void _copy(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: link));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Lien général copié !'),
+        backgroundColor: const Color(0xFF149954),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Future<void> _whatsapp(BuildContext context) async {
+    const msg = 'Bonjour, voici le lien pour payer votre loyer en ligne :';
+    final text = Uri.encodeComponent('$msg $link');
+    final url = Uri.parse('https://wa.me/?text=$text');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      if (context.mounted) _copy(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (adminUid.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0D1B2E), Color(0xFF1A4480)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.public_rounded, color: Colors.white, size: 16),
+              SizedBox(width: 7),
+              Text(
+                'Lien général — tous les locataires',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Envoyez ce lien à n\'importe quel locataire. Il choisira son nom.',
+            style: TextStyle(color: Color(0xFFABC4E0), fontSize: 11),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _whatsapp(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF25D366),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.chat_rounded,
+                            color: Colors.white, size: 14),
+                        SizedBox(width: 5),
+                        Text('WhatsApp',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => _copy(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.3)),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.copy_rounded,
+                            color: Colors.white, size: 14),
+                        SizedBox(width: 5),
+                        Text('Copier',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 PayStatus _statusFromTenant(String status) {
@@ -607,12 +740,14 @@ class _PaiementState extends State<Paiement> {
   }
 
   void _showPayCashSheet(BuildContext context) {
+    final adminUid = FirebaseAuth.instance.currentUser?.uid ?? '';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => _PayCashSheet(
         payments: _payments,
+        adminUid: adminUid,
         onConfirm: (payment, amount) => _recordCashPayment(payment, amount),
       ),
     );
@@ -715,9 +850,14 @@ class _PaiementState extends State<Paiement> {
 // ─────────────────────────────────────────────
 class _PayCashSheet extends StatefulWidget {
   final List<_Payment> payments;
+  final String adminUid;
   final Future<void> Function(_Payment payment, int amount) onConfirm;
 
-  const _PayCashSheet({required this.payments, required this.onConfirm});
+  const _PayCashSheet({
+    required this.payments,
+    required this.adminUid,
+    required this.onConfirm,
+  });
 
   @override
   State<_PayCashSheet> createState() => _PayCashSheetState();
@@ -733,169 +873,403 @@ class _PayCashSheetState extends State<_PayCashSheet> {
     super.dispose();
   }
 
+  // Génère le lien de paiement pour le locataire sélectionné
+  String _buildLink(_Payment p) {
+    final roomParts = p.room.split(' - ');
+    final chambre = Uri.encodeFull(
+        roomParts.isNotEmpty ? roomParts.first : p.room);
+    final nom = Uri.encodeFull(p.name);
+    final uid = Uri.encodeFull(widget.adminUid);
+    final tid = Uri.encodeFull(p.tenantId ?? '');
+    return 'https://gestion-locative-3f02c.web.app/pay'
+        '?uid=$uid&tenantId=$tid&nom=$nom&chambre=$chambre&montant=${p.amount}';
+  }
+
+  String _buildGeneralLink() {
+    final uid = Uri.encodeFull(widget.adminUid);
+    return 'https://gestion-locative-3f02c.web.app/pay?uid=$uid';
+  }
+
+  void _copyLink(String link) {
+    Clipboard.setData(ClipboardData(text: link));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Lien copié !'),
+        backgroundColor: const Color(0xFF149954),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Future<void> _shareWhatsApp(String link, String name) async {
+    final msg = Uri.encodeComponent(
+        'Bonjour $name, voici votre lien pour payer votre loyer en ligne : $link');
+    final url = Uri.parse('https://wa.me/?text=$msg');
+    try {
+      await launchUrl(url, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      _copyLink(link);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Lien copié (WhatsApp non disponible)'),
+            backgroundColor: Color(0xFF607086),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final link = _selected != null ? _buildLink(_selected!) : '';
+
     return Container(
       decoration: const BoxDecoration(
         color: _C.white,
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.88,
+      ),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(20, 16, 20, 24 + bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Barre de glissement
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _C.border,
+                  borderRadius: BorderRadius.circular(99),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Payé Cash',
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.bold,
+                color: _C.navy,
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // ── Lien général ────────────────────────────
+            _GeneralLinkCard(
+              link: _buildGeneralLink(),
+              adminUid: widget.adminUid,
+            ),
+            const SizedBox(height: 16),
+
+            // ── Séparateur ──────────────────────────────
+            Row(
+              children: [
+                const Expanded(child: Divider(color: _C.border)),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'ou choisir un locataire spécifique',
+                    style: TextStyle(
+                      color: _C.textMuted.withValues(alpha: 0.8),
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+                const Expanded(child: Divider(color: _C.border)),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // ── Sélection locataire ─────────────────────
+            const Text(
+              'Locataire',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: _C.textMuted,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
               decoration: BoxDecoration(
-                color: _C.border,
-                borderRadius: BorderRadius.circular(99),
+                color: _C.creamLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: DropdownButtonFormField<_Payment>(
+                value: _selected,
+                isExpanded: true,
+                hint: const Text(
+                  'Sélectionner un locataire',
+                  style: TextStyle(color: _C.textMuted, fontSize: 14),
+                ),
+                items: widget.payments
+                    .map(
+                      (p) => DropdownMenuItem(
+                        value: p,
+                        child: Text(
+                          p.name,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _C.textMain,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (v) {
+                  setState(() {
+                    _selected = v;
+                    if (v != null) {
+                      _montantCtrl.text = v.amount.toString();
+                    }
+                  });
+                },
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 13,
+                  ),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Enregistrer un paiement cash',
-            style: TextStyle(
-              fontSize: 17,
-              fontWeight: FontWeight.bold,
-              color: _C.navy,
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Sélection locataire
-          const Text(
-            'Locataire',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _C.textMuted,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            decoration: BoxDecoration(
-              color: _C.creamLight,
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: DropdownButtonFormField<_Payment>(
-              value: _selected,
-              hint: const Text(
-                'Sélectionner un locataire',
-                style: TextStyle(color: _C.textMuted, fontSize: 14),
+
+            // ── Lien + partage WhatsApp (si locataire sélectionné) ──
+            if (_selected != null) ...[
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF0F6FF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFB8D4F8)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.link_rounded,
+                            color: Color(0xFF1F6FEB), size: 16),
+                        SizedBox(width: 6),
+                        Text(
+                          'Lien de paiement',
+                          style: TextStyle(
+                            color: Color(0xFF1F6FEB),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      link,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                          color: Color(0xFF607086), fontSize: 11),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        // Bouton WhatsApp
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => _shareWhatsApp(
+                                link, _selected!.name),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF25D366),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.chat_rounded,
+                                      color: Colors.white, size: 15),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'WhatsApp',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // Bouton Copier
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () => _copyLink(link),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF1F6FEB),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.copy_rounded,
+                                      color: Colors.white, size: 15),
+                                  SizedBox(width: 6),
+                                  Text(
+                                    'Copier',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-              items: widget.payments
-                  .map(
-                    (p) => DropdownMenuItem(
-                      value: p,
+
+              // ── Séparateur ───────────────────────────────
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: Row(
+                  children: [
+                    const Expanded(child: Divider(color: _C.border)),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       child: Text(
-                        p.name,
-                        style: const TextStyle(
-                          color: _C.textMain,
-                          fontSize: 14,
+                        'ou enregistrer directement',
+                        style: TextStyle(
+                          color: _C.textMuted.withValues(alpha: 0.7),
+                          fontSize: 11,
                         ),
                       ),
                     ),
-                  )
-                  .toList(),
-              onChanged: (v) => setState(() => _selected = v),
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.symmetric(
+                    const Expanded(child: Divider(color: _C.border)),
+                  ],
+                ),
+              ),
+            ] else
+              const SizedBox(height: 12),
+
+            // ── Montant ─────────────────────────────────
+            const Text(
+              'Montant (FCFA)',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: _C.textMuted,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _montantCtrl,
+              keyboardType: TextInputType.number,
+              style: const TextStyle(fontSize: 14, color: _C.textMain),
+              decoration: InputDecoration(
+                hintText: 'Ex: 75 000',
+                hintStyle: const TextStyle(color: _C.textMuted),
+                filled: true,
+                fillColor: _C.creamLight,
+                contentPadding: const EdgeInsets.symmetric(
                   horizontal: 14,
                   vertical: 13,
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Montant (FCFA)',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: _C.textMuted,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _montantCtrl,
-            keyboardType: TextInputType.number,
-            style: const TextStyle(fontSize: 14, color: _C.textMain),
-            decoration: InputDecoration(
-              hintText: 'Ex: 75 000',
-              hintStyle: const TextStyle(color: _C.textMuted),
-              filled: true,
-              fillColor: _C.creamLight,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 13,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: BorderSide.none,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-                borderSide: const BorderSide(
-                  color: Color(0xFFE6A817),
-                  width: 1.5,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton(
-              onPressed: () async {
-                if (_selected == null) return;
-                final amount =
-                    int.tryParse(
-                      _montantCtrl.text.replaceAll(RegExp(r'[^0-9]'), ''),
-                    ) ??
-                    _selected!.amount;
-                await widget.onConfirm(_selected!, amount);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      '${_selected!.name} - ${_montantCtrl.text} FCFA enregistre',
-                    ),
-                    backgroundColor: _C.paidText,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(
+                    color: Color(0xFFE6A817),
+                    width: 1.5,
                   ),
-                );
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _C.cream,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                elevation: 0,
-              ),
-              child: const Text(
-                'Confirmer le paiement',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.bold,
-                  color: _C.navy,
                 ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 20),
+
+            // ── Bouton confirmer ────────────────────────
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: () async {
+                  if (_selected == null) return;
+                  final amount =
+                      int.tryParse(
+                        _montantCtrl.text
+                            .replaceAll(RegExp(r'[^0-9]'), ''),
+                      ) ??
+                      _selected!.amount;
+                  final name = _selected!.name;
+                  final montantText = _montantCtrl.text;
+                  final nav = Navigator.of(context);
+                  final messenger = ScaffoldMessenger.of(context);
+                  await widget.onConfirm(_selected!, amount);
+                  if (!mounted) return;
+                  nav.pop();
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        '$name — $montantText FCFA enregistré',
+                      ),
+                      backgroundColor: _C.paidText,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _C.cream,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text(
+                  'Confirmer le paiement',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: _C.navy,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

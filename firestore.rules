@@ -13,13 +13,25 @@ service cloud.firestore {
       }
 
       match /locataires/{locataireId} {
-        allow create, read, update, delete: if request.auth != null
-          && request.auth.uid == userId;
+        // Admin : accès complet
+        allow create, delete: if request.auth != null && request.auth.uid == userId;
+        // Lecture publique : nécessaire pour la page de paiement partagée
+        allow read: if true;
+        // Mise à jour publique limitée aux champs de paiement uniquement
+        allow update: if (request.auth != null && request.auth.uid == userId)
+          || request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['statusLabel', 'statusColor', 'balanceLabel', 'paymentSummary', 'lastPaymentAt']);
       }
 
       match /biens/{bienId} {
         allow create, read, update, delete: if request.auth != null
           && request.auth.uid == userId;
+      }
+
+      // Collection paiements : accessible publiquement en création (lien partagé)
+      match /paiements/{paiementId} {
+        allow read, update, delete: if request.auth != null && request.auth.uid == userId;
+        allow create: if true;
       }
     }
   }
