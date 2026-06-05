@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:gestion_locative/app_background.dart';
 import 'package:gestion_locative/locataire.dart';
+import 'package:gestion_locative/payment_code_service.dart';
 import 'package:gestion_locative/scan.dart';
 
 class _C {
@@ -101,11 +102,18 @@ class _AjoutState extends State<Ajout> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        await FirebaseFirestore.instance
+        final docRef = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('locataires')
             .add({...tenantData, 'createdAt': FieldValue.serverTimestamp()});
+
+        // Génère et enregistre le code de paiement unique
+        await PaymentCodeService.createForTenant(
+          uid: user.uid,
+          tenantId: docRef.id,
+          tenantName: name,
+        );
       }
 
       if (!mounted) return;
