@@ -878,11 +878,11 @@ class _PayCashSheetState extends State<_PayCashSheet> {
     // Le code est stocké dans Firestore — on le récupère via tenantId
     // Pour l'instant on utilise tenantId comme fallback dans le lien général
     // Le locataire saisira son code sur la page
-    return 'https://sample-firebase-ai-app-g-96d78.web.app/payer';
+    return 'https://NETLIFY_URL/payer';
   }
 
   String _buildGeneralLink() {
-    return 'https://sample-firebase-ai-app-g-96d78.web.app/payer';
+    return 'https://NETLIFY_URL/payer';
   }
 
   void _copyLink(String link) {

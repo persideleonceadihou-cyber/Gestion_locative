@@ -1,7 +1,14 @@
 [build]
-  command = "git clone https://github.com/flutter/flutter.git -b stable --depth 1 $HOME/flutter && export PATH=$PATH:$HOME/flutter/bin && flutter config --enable-web && flutter pub get && flutter build web --release --base-href /"
+  command = "git clone https://github.com/flutter/flutter.git -b stable --depth 1 $HOME/flutter && export PATH=$PATH:$HOME/flutter/bin && flutter config --enable-web && flutter pub get && flutter build web --release --base-href / && cp web/payer.html build/web/payer.html"
   publish = "build/web"
 
+# Sert payer.html directement (page de paiement sans Flutter)
+[[redirects]]
+  from = "/payer"
+  to = "/payer.html"
+  status = 200
+
+# Flutter SPA — toutes les autres routes vers index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"
