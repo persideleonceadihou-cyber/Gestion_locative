@@ -31,10 +31,10 @@ class _PayeCashState extends State<PayeCash> {
   String _paymentLink(TenantRecord tenant) {
     final code = tenant.paymentCode;
     if (code.isNotEmpty) {
-      return 'https://gestion-locative-3f02c.web.app/payer?code=$code';
+      return 'https://sample-firebase-ai-app-g-96d78.web.app/payer?code=$code';
     }
     // Fallback si code pas encore généré
-    return 'https://gestion-locative-3f02c.web.app/payer';
+    return 'https://sample-firebase-ai-app-g-96d78.web.app/payer';
   }
 
 
@@ -52,7 +52,7 @@ class _PayeCashState extends State<PayeCash> {
 
   // Lien général — le locataire saisira son code sur la page
   String _generalLink() {
-    return 'https://gestion-locative-3f02c.web.app/payer';
+    return 'https://sample-firebase-ai-app-g-96d78.web.app/payer';
   }
 
   void _copyGeneralLink() {

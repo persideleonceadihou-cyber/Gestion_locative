@@ -25,8 +25,10 @@ void main() async {
   // Sans ça, Flutter redirige vers #/connect et bloque le locataire.
   if (kIsWeb) {
     usePathUrlStrategy();
-    final uri = Uri.base;
-    if (uri.path == '/pay') {
+    final String url = Uri.base.toString();
+    
+    // Intercepter toute variante de /pay ou /payer pour éviter la redirection vers la connexion
+    if (url.contains('/pay') || url.contains('/payer')) {
       await Firebase.initializeApp(
           options: DefaultFirebaseOptions.currentPlatform);
       runApp(MaterialApp(
@@ -38,7 +40,7 @@ void main() async {
           useMaterial3: true,
         ),
         home: TenantPaymentPage(
-          code: uri.queryParameters['code'] ?? '',
+          code: Uri.base.queryParameters['code'] ?? '',
         ),
       ));
       return;

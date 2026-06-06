@@ -19,13 +19,12 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDPrUSd_N_lNTX-9IneRj0BYiHS6Prf74k',
-    appId: '1:822380501516:web:9272f837c6757517c76c29',
-    messagingSenderId: '822380501516',
-    projectId: 'gestion-locative-3f02c',
-    authDomain: 'gestion-locative-3f02c.firebaseapp.com',
-    storageBucket: 'gestion-locative-3f02c.firebasestorage.app',
-    measurementId: 'G-HM1JXL1Y4C',
+    apiKey: 'AIzaSyBYWT7L2wcrpMCTPixjRo78Zx-CVt7y0IA',
+    appId: '1:56626745106:web:19e99bb3d72717a24c2dcb',
+    messagingSenderId: '56626745106',
+    projectId: 'sample-firebase-ai-app-g-96d78',
+    authDomain: 'sample-firebase-ai-app-g-96d78.firebaseapp.com',
+    storageBucket: 'sample-firebase-ai-app-g-96d78.firebasestorage.app',
   );
 
   static const FirebaseOptions android = FirebaseOptions(

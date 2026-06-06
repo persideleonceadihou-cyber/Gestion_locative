@@ -36,6 +36,13 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
     // Après 4 secondes, aller vers le Dashboard
     Future.delayed(const Duration(seconds: 5), () {
       if (!mounted) return;
+      
+      // Ne pas rediriger si on est sur une page de paiement (vérification large)
+      final String url = Uri.base.toString();
+      if (url.contains('/pay') || url.contains('/payer')) {
+        return;
+      }
+      
       Navigator.pushReplacementNamed(context, '/connect');
     });
   }
