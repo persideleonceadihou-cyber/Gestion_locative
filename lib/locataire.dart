@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:gestion_locative/modifier_locataire.dart';
 
 class TenantDocument {
   final String title;
@@ -604,10 +605,34 @@ class _TenantCard extends StatelessWidget {
   }
 }
 
-class TenantDetailScreen extends StatelessWidget {
+class TenantDetailScreen extends StatefulWidget {
   final TenantRecord tenant;
 
   const TenantDetailScreen({super.key, required this.tenant});
+
+  @override
+  State<TenantDetailScreen> createState() => _TenantDetailScreenState();
+}
+
+class _TenantDetailScreenState extends State<TenantDetailScreen> {
+  late TenantRecord _tenant;
+
+  @override
+  void initState() {
+    super.initState();
+    _tenant = widget.tenant;
+  }
+
+  Future<void> _openEdit() async {
+    final result = await Navigator.of(context).push<TenantRecord>(
+      MaterialPageRoute(
+        builder: (_) => ModifierLocataire(tenant: _tenant),
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() => _tenant = result);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -616,56 +641,62 @@ class TenantDetailScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1A2B5E),
         foregroundColor: Colors.white,
-        title: Text(tenant.name),
+        title: Text(_tenant.name),
+        actions: [
+          IconButton(
+            tooltip: 'Modifier',
+            onPressed: _openEdit,
+            icon: const Icon(Icons.edit_outlined),
+          ),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          _DetailHeader(tenant: tenant),
+          _DetailHeader(tenant: _tenant),
           const SizedBox(height: 14),
           _DetailSection(
             title: 'Informations',
             children: [
-              _InfoRow(label: 'Nom', value: tenant.lastName),
+              _InfoRow(label: 'Nom', value: _tenant.lastName),
               _InfoRow(
                 label: 'Prenom',
-                value: tenant.firstName.isEmpty
+                value: _tenant.firstName.isEmpty
                     ? 'Non renseigne'
-                    : tenant.firstName,
+                    : _tenant.firstName,
               ),
-              _InfoRow(label: 'Nom complet', value: tenant.name),
-              _InfoRow(label: 'Numero de chambre', value: tenant.roomNumber),
-              _InfoRow(label: 'Bien', value: tenant.propertyName),
-              _InfoRow(label: 'Loyer', value: tenant.rentAmount),
-              _InfoRow(label: 'Telephone', value: tenant.phone),
-              _InfoRow(label: 'Email', value: tenant.email),
-              if (tenant.paymentCode.isNotEmpty) _CodeRow(code: tenant.paymentCode),
+              _InfoRow(label: 'Nom complet', value: _tenant.name),
+              _InfoRow(label: 'Numero de chambre', value: _tenant.roomNumber),
+              _InfoRow(label: 'Bien', value: _tenant.propertyName),
+              _InfoRow(label: 'Loyer', value: _tenant.rentAmount),
+              _InfoRow(label: 'Telephone', value: _tenant.phone),
+              _InfoRow(label: 'Email', value: _tenant.email),
+              if (_tenant.paymentCode.isNotEmpty) _CodeRow(code: _tenant.paymentCode),
             ],
           ),
           const SizedBox(height: 12),
-          // ── Bilan paiement ──
-          _PaymentBalanceCard(tenant: tenant),
+          _PaymentBalanceCard(tenant: _tenant),
           const SizedBox(height: 12),
           _DetailSection(
             title: 'Dossier',
             children: [
               _DocumentRow(
                 icon: Icons.description_outlined,
-                title: tenant.contract.title.isEmpty
-                    ? 'Contrat ${tenant.roomNumber}'
-                    : tenant.contract.title,
-                reference: tenant.contract.reference,
-                state: tenant.contract.state,
-                dateLabel: tenant.contract.dateLabel,
+                title: _tenant.contract.title.isEmpty
+                    ? 'Contrat ${_tenant.roomNumber}'
+                    : _tenant.contract.title,
+                reference: _tenant.contract.reference,
+                state: _tenant.contract.state,
+                dateLabel: _tenant.contract.dateLabel,
               ),
               _DocumentRow(
                 icon: Icons.fact_check_outlined,
-                title: tenant.inventory.title.isEmpty
-                    ? 'Etat des lieux ${tenant.roomNumber}'
-                    : tenant.inventory.title,
-                reference: tenant.inventory.reference,
-                state: tenant.inventory.state,
-                dateLabel: tenant.inventory.dateLabel,
+                title: _tenant.inventory.title.isEmpty
+                    ? 'Etat des lieux ${_tenant.roomNumber}'
+                    : _tenant.inventory.title,
+                reference: _tenant.inventory.reference,
+                state: _tenant.inventory.state,
+                dateLabel: _tenant.inventory.dateLabel,
               ),
             ],
           ),
@@ -673,12 +704,12 @@ class TenantDetailScreen extends StatelessWidget {
           _DetailSection(
             title: 'Suivi',
             children: [
-              _InfoRow(label: 'Statut', value: tenant.statusLabel),
-              _InfoRow(label: 'Solde', value: tenant.balanceLabel),
-              _InfoRow(label: 'Occupation', value: tenant.occupationLabel),
-              _InfoRow(label: 'Paiement', value: tenant.paymentSummary),
-              _InfoRow(label: 'Urgence', value: tenant.emergencyContact),
-              _InfoRow(label: 'Notes', value: tenant.notes),
+              _InfoRow(label: 'Statut', value: _tenant.statusLabel),
+              _InfoRow(label: 'Solde', value: _tenant.balanceLabel),
+              _InfoRow(label: 'Occupation', value: _tenant.occupationLabel),
+              _InfoRow(label: 'Paiement', value: _tenant.paymentSummary),
+              _InfoRow(label: 'Urgence', value: _tenant.emergencyContact),
+              _InfoRow(label: 'Notes', value: _tenant.notes),
             ],
           ),
         ],
