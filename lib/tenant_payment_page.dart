@@ -3,8 +3,8 @@
 // Ses informations s'affichent automatiquement.
 // Il choisit le nombre de mois et paie via mobile money ou virement.
 //
-// URL : https://gestion-locative-3f02c.web.app/pay
-// Avec code pré-rempli : /pay?code=XXXXXX
+// URL : https://NETLIFY_URL/payer
+// Avec code pré-rempli : /payer?code=XXXXXX
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
