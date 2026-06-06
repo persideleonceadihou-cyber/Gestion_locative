@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class Home extends StatefulWidget {
@@ -36,14 +37,16 @@ class _HomeState extends State<Home> with SingleTickerProviderStateMixin {
     // Après 4 secondes, aller vers le Dashboard
     Future.delayed(const Duration(seconds: 5), () {
       if (!mounted) return;
-      
-      // Ne pas rediriger si on est sur une page de paiement (vérification large)
+
       final String url = Uri.base.toString();
-      if (url.contains('/pay') || url.contains('/payer')) {
-        return;
+      if (url.contains('/pay') || url.contains('/payer')) return;
+
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        Navigator.pushReplacementNamed(context, '/accueil');
+      } else {
+        Navigator.pushReplacementNamed(context, '/connect');
       }
-      
-      Navigator.pushReplacementNamed(context, '/connect');
     });
   }
 
