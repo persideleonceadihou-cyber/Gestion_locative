@@ -58,6 +58,7 @@ class TenantRecord {
   final String notes;
   final String emergencyContact;
   final String paymentCode;
+  final DateTime? entryDate;
 
   const TenantRecord({
     this.id,
@@ -77,6 +78,7 @@ class TenantRecord {
     required this.notes,
     required this.emergencyContact,
     this.paymentCode = '',
+    this.entryDate,
   });
 
   factory TenantRecord.fromMap(Map<String, dynamic> map) {
@@ -106,6 +108,9 @@ class TenantRecord {
       notes: map['notes']?.toString() ?? '',
       emergencyContact: map['emergencyContact']?.toString() ?? '',
       paymentCode: map['paymentCode']?.toString() ?? '',
+      entryDate: map['entryDate'] != null
+          ? (map['entryDate'] as dynamic).toDate()
+          : null,
     );
   }
 
@@ -127,6 +132,7 @@ class TenantRecord {
     String? notes,
     String? emergencyContact,
     String? paymentCode,
+    DateTime? entryDate,
   }) {
     return TenantRecord(
       id: id ?? this.id,
@@ -146,6 +152,7 @@ class TenantRecord {
       notes: notes ?? this.notes,
       emergencyContact: emergencyContact ?? this.emergencyContact,
       paymentCode: paymentCode ?? this.paymentCode,
+      entryDate: entryDate ?? this.entryDate,
     );
   }
 
@@ -190,6 +197,7 @@ class TenantRecord {
     'notes': notes,
     'emergencyContact': emergencyContact,
     'paymentCode': paymentCode,
+    if (entryDate != null) 'entryDate': Timestamp.fromDate(entryDate!),
   };
 }
 
@@ -635,6 +643,9 @@ class TenantDetailScreen extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
+          // ── Bilan paiement ──
+          _PaymentBalanceCard(tenant: tenant),
+          const SizedBox(height: 12),
           _DetailSection(
             title: 'Dossier',
             children: [
@@ -758,6 +769,141 @@ class _DetailSection extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ...children,
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// BILAN PAIEMENT
+// ─────────────────────────────────────────────
+class _PaymentBalanceCard extends StatefulWidget {
+  final TenantRecord tenant;
+  const _PaymentBalanceCard({required this.tenant});
+
+  @override
+  State<_PaymentBalanceCard> createState() => _PaymentBalanceCardState();
+}
+
+class _PaymentBalanceCardState extends State<_PaymentBalanceCard> {
+  int _monthsPaid = 0;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPaid();
+  }
+
+  Future<void> _fetchPaid() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final tenantId = widget.tenant.id;
+    if (uid == null || tenantId == null) {
+      setState(() => _loading = false);
+      return;
+    }
+    try {
+      final snap = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('paiements')
+          .where('tenantId', isEqualTo: tenantId)
+          .get();
+      int total = 0;
+      for (final doc in snap.docs) {
+        final data = doc.data();
+        total += (data['monthsCount'] as num?)?.toInt() ?? 1;
+      }
+      if (mounted) setState(() { _monthsPaid = total; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  String _fmt(int v) => v.toString().replaceAllMapped(
+      RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ' ');
+
+  @override
+  Widget build(BuildContext context) {
+    final monthly = int.tryParse(
+        widget.tenant.rentAmount.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    final entry = widget.tenant.entryDate;
+    final now = DateTime.now();
+    final monthsElapsed = entry != null
+        ? ((now.year - entry.year) * 12 + now.month - entry.month)
+        : null;
+    final monthsOwed = monthsElapsed != null
+        ? (monthsElapsed - _monthsPaid).clamp(0, 999)
+        : null;
+    final balance = monthsOwed != null ? monthsOwed * monthly : null;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: const Color(0xFF1A2B5E).withValues(alpha: .06), blurRadius: 14, offset: const Offset(0, 6))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF1A2B5E), size: 18),
+              SizedBox(width: 8),
+              Text('Suivi des paiements', style: TextStyle(color: Color(0xFF1A2B5E), fontWeight: FontWeight.w900, fontSize: 15)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (_loading)
+            const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+          else ...[
+            _BilanRow(label: 'Date d\'entrée', value: entry != null
+                ? '${entry.day.toString().padLeft(2,'0')}/${entry.month.toString().padLeft(2,'0')}/${entry.year}'
+                : 'Non renseignée', icon: Icons.calendar_today_outlined),
+            _BilanRow(label: 'Mois écoulés', value: monthsElapsed != null ? '$monthsElapsed mois' : '—', icon: Icons.timelapse_outlined),
+            _BilanRow(label: 'Mois payés', value: '$_monthsPaid mois', icon: Icons.check_circle_outline, color: const Color(0xFF149954)),
+            _BilanRow(label: 'Mois restants', value: monthsOwed != null ? '$monthsOwed mois' : '—',
+                icon: Icons.pending_outlined, color: monthsOwed != null && monthsOwed > 0 ? const Color(0xFFE53935) : const Color(0xFF149954)),
+            const Divider(height: 20, color: Color(0xFFEEF3F8)),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Solde restant à payer', style: TextStyle(color: Color(0xFF607086), fontSize: 13)),
+                Text(
+                  balance != null ? '${_fmt(balance)} FCFA' : '— FCFA',
+                  style: TextStyle(
+                    color: balance != null && balance > 0 ? const Color(0xFFE53935) : const Color(0xFF149954),
+                    fontSize: 17, fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _BilanRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color? color;
+  const _BilanRow({required this.label, required this.value, required this.icon, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: color ?? const Color(0xFF8A9BB0)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(label, style: const TextStyle(color: Color(0xFF607086), fontSize: 13))),
+          Text(value, style: TextStyle(color: color ?? const Color(0xFF1A2B5E), fontWeight: FontWeight.w700, fontSize: 13)),
         ],
       ),
     );

@@ -40,6 +40,7 @@ class _AjoutState extends State<Ajout> {
 
   String _selectedStatus = 'A jour';
   String? _scannedFolderLabel;
+  DateTime? _entryDate;
 
   @override
   void dispose() {
@@ -92,6 +93,7 @@ class _AjoutState extends State<Ajout> {
         'dateLabel': 'À programmer',
         'state': 'À faire',
       },
+      if (_entryDate != null) 'entryDate': Timestamp.fromDate(_entryDate!),
       'paymentSummary': 'Dossier créé, première échéance à planifier',
       'notes': notes.isEmpty ? 'Aucune note ajoutée pour le moment.' : notes,
       'emergencyContact': emergencyContact.isEmpty
@@ -437,6 +439,46 @@ class _AjoutState extends State<Ajout> {
                         _StatusSelector(
                           selected: _selectedStatus,
                           onChanged: (v) => setState(() => _selectedStatus = v),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Date d'entrée
+                        const Text('Date d\'entrée', style: TextStyle(color: Color(0xFF607086), fontSize: 12, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: _entryDate ?? DateTime.now(),
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime.now(),
+                              locale: const Locale('fr'),
+                            );
+                            if (picked != null) setState(() => _entryDate = picked);
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0F4FA),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: const Color(0xFFDDEAF8), width: 1.5),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.calendar_today_outlined, color: Color(0xFF7D8CA0), size: 20),
+                                const SizedBox(width: 10),
+                                Text(
+                                  _entryDate != null
+                                      ? '${_entryDate!.day.toString().padLeft(2,'0')}/${_entryDate!.month.toString().padLeft(2,'0')}/${_entryDate!.year}'
+                                      : 'Sélectionner la date d\'entrée',
+                                  style: TextStyle(
+                                    color: _entryDate != null ? const Color(0xFF132238) : const Color(0xFF7D8CA0),
+                                    fontSize: 14, fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                         ),
                         const SizedBox(height: 16),
 

@@ -212,6 +212,26 @@
         <span class="rent-label">Loyer mensuel</span>
         <span class="rent-value" id="tenantRent">-<span class="rent-currency">FCFA</span></span>
       </div>
+      <hr class="divider">
+      <!-- Bilan paiement -->
+      <div id="balanceBox" style="display:none">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px">
+          <span style="color:#7A8FA6">Mois écoulés</span>
+          <span style="font-weight:700;color:#0F2542" id="balMonthsElapsed">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:13px">
+          <span style="color:#7A8FA6">Mois payés</span>
+          <span style="font-weight:700;color:#149954" id="balMonthsPaid">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:13px">
+          <span style="color:#7A8FA6">Mois restants</span>
+          <span style="font-weight:700" id="balMonthsOwed">—</span>
+        </div>
+        <div style="background:#F4F8FF;border-radius:12px;padding:12px 14px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;color:#607086">Solde à régulariser</span>
+          <span style="font-size:18px;font-weight:900" id="balAmount">— FCFA</span>
+        </div>
+      </div>
     </div>
 
     <!-- Sélecteur de mois -->
@@ -346,7 +366,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, getDoc, addDoc, setDoc, collection, serverTimestamp }
+import { getFirestore, doc, getDoc, addDoc, setDoc, collection, query, where, getDocs, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const app = initializeApp({
@@ -416,6 +436,35 @@ window.lookup = async function () {
     document.getElementById('headerSub').textContent = 'Code : ' + code;
 
     updateTotal();
+
+    // ── Bilan paiement ──
+    try {
+      const MS_PER_MONTH = 30.4375 * 24 * 3600 * 1000;
+      const entryRaw = tenantData.entryDate;
+      const entryMs = entryRaw ? (entryRaw.toDate ? entryRaw.toDate().getTime() : new Date(entryRaw).getTime()) : null;
+      const monthsElapsed = entryMs ? Math.floor((Date.now() - entryMs) / MS_PER_MONTH) : null;
+
+      const pSnap = await getDocs(query(
+        collection(db, 'users', meta.uid, 'paiements'),
+        where('tenantId', '==', meta.tenantId)
+      ));
+      let monthsPaid = 0;
+      pSnap.forEach(d => { monthsPaid += (d.data().monthsCount || 1); });
+
+      const monthsOwed = monthsElapsed != null ? Math.max(0, monthsElapsed - monthsPaid) : null;
+      const balance = monthsOwed != null ? monthsOwed * monthlyRent : null;
+
+      document.getElementById('balMonthsElapsed').textContent = monthsElapsed != null ? monthsElapsed + ' mois' : '—';
+      document.getElementById('balMonthsPaid').textContent = monthsPaid + ' mois';
+      const owedEl = document.getElementById('balMonthsOwed');
+      owedEl.textContent = monthsOwed != null ? monthsOwed + ' mois' : '—';
+      owedEl.style.color = (monthsOwed > 0) ? '#C0392B' : '#149954';
+      const balEl = document.getElementById('balAmount');
+      balEl.textContent = balance != null ? fmt(balance) + ' FCFA' : '— FCFA';
+      balEl.style.color = (balance > 0) ? '#C0392B' : '#149954';
+      document.getElementById('balanceBox').style.display = 'block';
+    } catch(_) {}
+
     show('stepCode', 'stepInfo');
   } catch (e) {
     document.getElementById('codeErrorMsg').textContent = e.message || 'Erreur. Réessayez.';
