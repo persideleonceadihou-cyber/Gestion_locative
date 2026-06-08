@@ -161,7 +161,9 @@ class _AjoutState extends State<Ajout> {
             : 'Contact urgence : $emergencyContact',
       );
 
-      if (mounted) Navigator.of(context).pop(tenantRecord);
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil('/locataire', (route) => false);
+      }
     } on FirebaseException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
