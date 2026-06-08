@@ -75,7 +75,12 @@ class MyApp extends StatelessWidget {
         '/profil': (context) => const Profil(),
         '/scan': (context) => const scan.Scan(),
         '/proprietaire': (context) => const Propretaire(),
-        '/locataire': (context) => const LocatairesScreen(),
+        '/locataire': (context) {
+          final arguments = ModalRoute.of(context)?.settings.arguments;
+          return LocatairesScreen(
+            initialTenant: arguments is TenantRecord ? arguments : null,
+          );
+        },
         '/ajout': (context) => const AjoutMaison(),
         '/ajoutLocataire': (context) => const Ajout(),
         '/payeCash': (context) => const PayeCash(),

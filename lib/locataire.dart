@@ -291,8 +291,13 @@ const localPreviewTenants = [
 
 class LocatairesScreen extends StatefulWidget {
   final bool showBottomNav;
+  final TenantRecord? initialTenant;
 
-  const LocatairesScreen({super.key, this.showBottomNav = true});
+  const LocatairesScreen({
+    super.key,
+    this.showBottomNav = true,
+    this.initialTenant,
+  });
 
   @override
   State<LocatairesScreen> createState() => _LocatairesScreenState();
@@ -302,6 +307,15 @@ class _LocatairesScreenState extends State<LocatairesScreen> {
   final TextEditingController _searchController = TextEditingController();
   final List<TenantRecord> _tenants = List.of(localPreviewTenants);
   String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    final initialTenant = widget.initialTenant;
+    if (initialTenant != null) {
+      _tenants.insert(0, initialTenant);
+    }
+  }
 
   List<TenantRecord> get _filtered {
     if (_query.trim().isEmpty) return _tenants;
@@ -417,10 +431,16 @@ class _LocatairesScreenState extends State<LocatairesScreen> {
                   )
                   .toList()
             : <TenantRecord>[];
+        final initialTenant = widget.initialTenant;
+        final visibleTenants =
+            initialTenant != null &&
+                !tenants.any((tenant) => tenant.id == initialTenant.id)
+            ? [initialTenant, ...tenants]
+            : tenants;
         final q = _query.toLowerCase();
         final filtered = q.isEmpty
-            ? tenants
-            : tenants
+            ? visibleTenants
+            : visibleTenants
                   .where(
                     (t) =>
                         t.name.toLowerCase().contains(q) ||

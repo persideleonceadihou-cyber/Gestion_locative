@@ -39,6 +39,7 @@ class _AjoutState extends State<Ajout> {
   final _notesController = TextEditingController();
 
   String _selectedStatus = 'A jour';
+  String? _selectedPropertyId;
   String? _scannedFolderLabel;
   DateTime? _entryDate;
 
@@ -73,6 +74,7 @@ class _AjoutState extends State<Ajout> {
       'nom': name,
       'roomNumber': room,
       'chambre': room,
+      if (_selectedPropertyId != null) 'propertyId': _selectedPropertyId,
       'propertyName': property,
       'bien': property,
       'phone': phone,
@@ -103,12 +105,14 @@ class _AjoutState extends State<Ajout> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
+      String? savedTenantId;
       if (user != null) {
         final docRef = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .collection('locataires')
             .add({...tenantData, 'createdAt': FieldValue.serverTimestamp()});
+        savedTenantId = docRef.id;
 
         // Génère et enregistre le code de paiement unique
         await PaymentCodeService.createForTenant(
@@ -116,6 +120,20 @@ class _AjoutState extends State<Ajout> {
           tenantId: docRef.id,
           tenantName: name,
         );
+
+        if (_selectedPropertyId != null) {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .collection('biens')
+              .doc(_selectedPropertyId)
+              .update({
+                'isRented': true,
+                'status': 'Loue',
+                'tenantName': name,
+                'tenantId': docRef.id,
+              });
+        }
       }
 
       if (!mounted) return;
@@ -132,6 +150,7 @@ class _AjoutState extends State<Ajout> {
       );
 
       final tenantRecord = TenantRecord(
+        id: savedTenantId ?? DateTime.now().microsecondsSinceEpoch.toString(),
         name: name,
         roomNumber: room,
         propertyName: property,
@@ -162,7 +181,11 @@ class _AjoutState extends State<Ajout> {
       );
 
       if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil('/locataire', (route) => false);
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/locataire',
+          (route) => false,
+          arguments: tenantRecord,
+        );
       }
     } on FirebaseException catch (e) {
       if (!mounted) return;
@@ -376,11 +399,19 @@ class _AjoutState extends State<Ajout> {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        _Field(
-                          controller: _propertyController,
-                          label: 'Bien loué',
-                          icon: Icons.home_work_outlined,
+                        _FreePropertyDropdown(
+                          selectedPropertyId: _selectedPropertyId,
+                          fallbackController: _propertyController,
                           validator: _requiredValidator,
+                          onChanged: (property) {
+                            setState(() {
+                              _selectedPropertyId = property?.id;
+                              _propertyController.text = property?.title ?? '';
+                              _rentController.text = property == null
+                                  ? ''
+                                  : _rentInputFromPrice(property.price);
+                            });
+                          },
                         ),
                       ],
                     ),
@@ -688,6 +719,14 @@ class _AjoutState extends State<Ajout> {
     return '${now.day} ${months[now.month - 1]} ${now.year}';
   }
 
+  String _rentInputFromPrice(String price) {
+    final cleaned = price
+        .replaceAll(RegExp(r'\s*FCFA\s*', caseSensitive: false), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    return cleaned.isEmpty ? price.trim() : cleaned;
+  }
+
   Color _statusColorFor(String status) {
     switch (status) {
       case 'Retard':
@@ -773,6 +812,180 @@ class _SectionCard extends StatelessWidget {
           child,
         ],
       ),
+    );
+  }
+}
+
+class _FreePropertyOption {
+  final String id;
+  final String title;
+  final String location;
+  final String price;
+
+  const _FreePropertyOption({
+    required this.id,
+    required this.title,
+    required this.location,
+    required this.price,
+  });
+
+  String get label {
+    if (location.trim().isEmpty) return title;
+    return '$title - $location';
+  }
+
+  factory _FreePropertyOption.fromDoc(
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final map = doc.data();
+    final priceNumber = map['priceNumber'] is num
+        ? (map['priceNumber'] as num).toInt()
+        : null;
+    final price = map['price']?.toString().trim();
+    return _FreePropertyOption(
+      id: doc.id,
+      title: map['title']?.toString() ?? 'Bien sans nom',
+      location: map['location']?.toString() ?? '',
+      price: price != null && price.isNotEmpty
+          ? price
+          : priceNumber == null
+          ? ''
+          : '$priceNumber FCFA',
+    );
+  }
+}
+
+class _FreePropertyDropdown extends StatelessWidget {
+  final String? selectedPropertyId;
+  final TextEditingController fallbackController;
+  final String? Function(String?)? validator;
+  final ValueChanged<_FreePropertyOption?> onChanged;
+
+  const _FreePropertyDropdown({
+    required this.selectedPropertyId,
+    required this.fallbackController,
+    required this.validator,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return _Field(
+        controller: fallbackController,
+        label: 'Bien loué',
+        icon: Icons.home_work_outlined,
+        validator: validator,
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('biens')
+          .snapshots(),
+      builder: (context, snapshot) {
+        final options = snapshot.hasData
+            ? snapshot.data!.docs
+                  .where((doc) {
+                    final map = doc.data();
+                    final status =
+                        map['status']?.toString().toLowerCase() ?? '';
+                    return map['isRented'] != true && !status.contains('lou');
+                  })
+                  .map(_FreePropertyOption.fromDoc)
+                  .toList()
+            : <_FreePropertyOption>[];
+        options.sort((a, b) => a.title.compareTo(b.title));
+
+        final selectedValue =
+            options.any((option) => option.id == selectedPropertyId)
+            ? selectedPropertyId
+            : null;
+
+        return DropdownButtonFormField<String>(
+          initialValue: selectedValue,
+          isExpanded: true,
+          items: options
+              .map(
+                (property) => DropdownMenuItem<String>(
+                  value: property.id,
+                  child: Text(
+                    property.price.isEmpty
+                        ? property.label
+                        : '${property.label} - ${property.price}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: options.isEmpty
+              ? null
+              : (value) {
+                  _FreePropertyOption? selected;
+                  for (final property in options) {
+                    if (property.id == value) {
+                      selected = property;
+                      break;
+                    }
+                  }
+                  onChanged(selected);
+                },
+          validator: (_) => validator?.call(fallbackController.text),
+          decoration: InputDecoration(
+            labelText: options.isEmpty
+                ? 'Aucun bien libre disponible'
+                : 'Bien loué',
+            labelStyle: const TextStyle(color: Color(0xFF7D8CA0), fontSize: 13),
+            prefixIcon: const Icon(
+              Icons.home_work_outlined,
+              color: Color(0xFF7D8CA0),
+              size: 20,
+            ),
+            filled: true,
+            fillColor: const Color(0xFFF0F4FA),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 14,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: Color(0xFFDDEAF8),
+                width: 1.5,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: Color(0xFF1F6FEB),
+                width: 1.8,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: Color(0xFFE53935),
+                width: 1.5,
+              ),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(16),
+              borderSide: const BorderSide(
+                color: Color(0xFFE53935),
+                width: 1.8,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
