@@ -12,7 +12,6 @@ import 'package:gestion_locative/paiement.dart';
 import 'package:gestion_locative/profil.dart';
 import 'package:gestion_locative/scan.dart' as scan;
 import 'package:gestion_locative/PayeCash.dart';
-import 'package:gestion_locative/home.dart';
 import 'package:gestion_locative/ajoutMaison.dart';
 import 'package:gestion_locative/ajout.dart';
 import 'package:gestion_locative/Accueil.dart';
@@ -65,7 +64,23 @@ class MyApp extends StatelessWidget {
             ColorScheme.fromSeed(seedColor: const Color(0xFF1F6FEB)),
         useMaterial3: true,
       ),
-      home: const Home(),
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              backgroundColor: Color(0xFF1A2B5E),
+              body: Center(
+                child: CircularProgressIndicator(color: Colors.white),
+              ),
+            );
+          }
+          if (snapshot.hasData && snapshot.data != null) {
+            return Accueil(userName: snapshot.data!.displayName ?? "Utilisateur");
+          }
+          return const Connect();
+        },
+      ),
       routes: {
         '/connect': (context) => const Connect(),
         '/accueil': (context) => Accueil(userName: "Utilisateur"),
