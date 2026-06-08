@@ -4,7 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:gestion_locative/app_background.dart';
 import 'package:gestion_locative/locataire.dart';
 import 'package:gestion_locative/payment_code_service.dart';
-import 'package:gestion_locative/scan_mobile.dart';
+import 'package:gestion_locative/scan.dart';
 
 class _C {
   static const navy = Color(0xFF1A2B5E);
