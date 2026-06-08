@@ -11,6 +11,8 @@ class DefaultFirebaseOptions {
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
+      case TargetPlatform.iOS:
+        return ios;
       default:
         throw UnsupportedError(
           'DefaultFirebaseOptions are not configured for this platform.',
@@ -19,19 +21,29 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBYWT7L2wcrpMCTPixjRo78Zx-CVt7y0IA',
-    appId: '1:56626745106:web:19e99bb3d72717a24c2dcb',
-    messagingSenderId: '56626745106',
-    projectId: 'sample-firebase-ai-app-g-96d78',
-    authDomain: 'sample-firebase-ai-app-g-96d78.firebaseapp.com',
-    storageBucket: 'sample-firebase-ai-app-g-96d78.firebasestorage.app',
+    apiKey: 'AIzaSyDpq3esF8ij4SH4Whdeo3e6qBgioOHjKII',
+    appId: '1:1099273148171:web:3f45105101ce51bf54f40e',
+    messagingSenderId: '1099273148171',
+    projectId: 'gest-loca',
+    authDomain: 'gest-loca.firebaseapp.com',
+    storageBucket: 'gest-loca.firebasestorage.app',
+    measurementId: 'G-9P4BPP29X0',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBYWT7L2wcrpMCTPixjRo78Zx-CVt7y0IA',
-    appId: '1:56626745106:web:19e99bb3d72717a24c2dcb',
-    messagingSenderId: '56626745106',
-    projectId: 'sample-firebase-ai-app-g-96d78',
-    storageBucket: 'sample-firebase-ai-app-g-96d78.firebasestorage.app',
+    apiKey: 'AIzaSyDVedsXphE_AgIkjxWFlkK6YK1wmwxLMP8',
+    appId: '1:1099273148171:android:03c39426ccc8d58554f40e',
+    messagingSenderId: '1099273148171',
+    projectId: 'gest-loca',
+    storageBucket: 'gest-loca.firebasestorage.app',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyDb8IXqJ1p5fbiqGbW-mmibquP49amx6pA',
+    appId: '1:1099273148171:ios:38239a5e87a5c13854f40e',
+    messagingSenderId: '1099273148171',
+    projectId: 'gest-loca',
+    storageBucket: 'gest-loca.firebasestorage.app',
+    iosBundleId: 'com.example.gestionLocative',
   );
 }
