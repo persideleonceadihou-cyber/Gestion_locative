@@ -386,33 +386,7 @@ class _LocatairesScreenState extends State<LocatairesScreen> {
   Future<void> _addTenant(BuildContext context) async {
     final result = await Navigator.pushNamed(context, '/ajoutLocataire');
     final user = FirebaseAuth.instance.currentUser;
-    if (result is TenantRecord && user != null) {
-      try {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .collection('locataires')
-            .add({...result.toMap(), 'createdAt': FieldValue.serverTimestamp()});
-      } on FirebaseException catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e.message ?? 'Enregistrement impossible.'),
-            backgroundColor: const Color(0xFF993C1D),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      } catch (_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Enregistrement impossible pour le moment.'),
-            backgroundColor: Color(0xFF993C1D),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } else if (result is TenantRecord) {
+    if (result is TenantRecord && user == null) {
       setState(() {
         _tenants.insert(
           0,
@@ -477,6 +451,27 @@ class _LocatairesScreenState extends State<LocatairesScreen> {
             ),
           ),
           onDelete: () async {
+            final confirm = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Confirmer la suppression'),
+                content: Text('Voulez-vous vraiment supprimer le locataire ${tenant.name} ?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Annuler'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    style: TextButton.styleFrom(foregroundColor: const Color(0xFF993C1D)),
+                    child: const Text('Supprimer'),
+                  ),
+                ],
+              ),
+            );
+
+            if (confirm != true) return;
+
             if (firestoreUserId != null && tenant.id != null) {
               await FirebaseFirestore.instance
                   .collection('users')

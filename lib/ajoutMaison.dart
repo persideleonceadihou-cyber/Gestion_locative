@@ -1,11 +1,14 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:gestion_locative/app_background.dart';
+import 'package:image_picker/image_picker.dart';
 
 class _C {
   static const navy = Color(0xFF1A2B5E);
-  static const cream = Color(0xFFF2C94C);
   static const creamLight = Color(0xFFFDF6DC);
   static const bgPage = Color(0xFFF5F0E8);
   static const white = Color(0xFFFFFFFF);
@@ -32,8 +35,11 @@ class _AjoutMaisonState extends State<AjoutMaison> {
   final _descController = TextEditingController();
   final _roomsController = TextEditingController();
 
+  final _imagePicker = ImagePicker();
   String _selectedEtat = 'Disponible';
   String _selectedType = 'Maison';
+  String? _imageBase64;
+  String? _imageName;
   bool _isSaving = false;
 
   @override
@@ -65,6 +71,8 @@ class _AjoutMaisonState extends State<AjoutMaison> {
       'status': _selectedEtat,
       'isRented': _selectedEtat.toLowerCase().contains('lou'),
       'image': 'assets/images/img.jpeg',
+      if (_imageBase64 != null) 'imageBase64': _imageBase64,
+      if (_imageName != null) 'imageName': _imageName,
     };
 
     try {
@@ -122,6 +130,33 @@ class _AjoutMaisonState extends State<AjoutMaison> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final image = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 900,
+        imageQuality: 58,
+      );
+      if (image == null) return;
+
+      final bytes = await image.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _imageBase64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+        _imageName = image.name;
+      });
+    } catch (_) {
+      _showSaveError('Impossible de charger cette image.');
+    }
+  }
+
+  void _removeImage() {
+    setState(() {
+      _imageBase64 = null;
+      _imageName = null;
+    });
   }
 
   @override
@@ -266,6 +301,18 @@ class _AjoutMaisonState extends State<AjoutMaison> {
                           setState(() => _selectedEtat = value),
                     ),
                   ),
+                  const SizedBox(height: 14),
+                  _SectionCard(
+                    icon: Icons.photo_camera_outlined,
+                    iconColor: _C.navy,
+                    title: 'Image du bien',
+                    child: _PropertyImagePicker(
+                      imageBase64: _imageBase64,
+                      imageName: _imageName,
+                      onPick: _pickImage,
+                      onRemove: _removeImage,
+                    ),
+                  ),
                   const SizedBox(height: 24),
                   SizedBox(
                     width: double.infinity,
@@ -294,9 +341,108 @@ class _AjoutMaisonState extends State<AjoutMaison> {
   }
 
   String? _required(String? value) {
-    if (value == null || value.trim().isEmpty)
+    if (value == null || value.trim().isEmpty) {
       return 'Ce champ est obligatoire';
+    }
     return null;
+  }
+}
+
+class _PropertyImagePicker extends StatelessWidget {
+  final String? imageBase64;
+  final String? imageName;
+  final VoidCallback onPick;
+  final VoidCallback onRemove;
+
+  const _PropertyImagePicker({
+    required this.imageBase64,
+    required this.imageName,
+    required this.onPick,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final imageBytes = _decodeImage(imageBase64);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AspectRatio(
+          aspectRatio: 16 / 9,
+          child: Container(
+            decoration: BoxDecoration(
+              color: _C.creamLight,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _C.border, width: 1.4),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: imageBytes == null
+                ? const Center(
+                    child: Icon(
+                      Icons.add_photo_alternate_outlined,
+                      color: _C.textMuted,
+                      size: 42,
+                    ),
+                  )
+                : Image.memory(imageBytes, fit: BoxFit.cover),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onPick,
+                icon: const Icon(Icons.photo_library_outlined, size: 18),
+                label: Text(
+                  imageBytes == null ? 'Ajouter une image' : 'Changer',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: _C.navy,
+                  side: const BorderSide(color: _C.navy),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                ),
+              ),
+            ),
+            if (imageBytes != null) ...[
+              const SizedBox(width: 10),
+              IconButton.filledTonal(
+                tooltip: 'Retirer',
+                onPressed: onRemove,
+                icon: const Icon(Icons.delete_outline_rounded),
+                color: _C.danger,
+              ),
+            ],
+          ],
+        ),
+        if (imageName != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            imageName!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: _C.textMuted,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  static Uint8List? _decodeImage(String? value) {
+    if (value == null || value.isEmpty) return null;
+    try {
+      final payload = value.contains(',') ? value.split(',').last : value;
+      return base64Decode(payload);
+    } catch (_) {
+      return null;
+    }
   }
 }
 

@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -18,38 +21,44 @@ class _C {
 enum _PropertyFilter { all, rented, free }
 
 class _Property {
+  final String? id;
   final String title;
   final String location;
   final String type;
   final String price;
   final int priceNumber;
   final String image;
+  final String? imageBase64;
   final bool isRented;
   final String? tenantName;
 
   const _Property({
+    this.id,
     required this.title,
     required this.location,
     required this.type,
     required this.price,
     required this.priceNumber,
     required this.image,
+    this.imageBase64,
     required this.isRented,
     this.tenantName,
   });
 
-  factory _Property.fromMap(Map<String, dynamic> map) {
+  factory _Property.fromMap(Map<String, dynamic> map, {String? id}) {
     final status = map['status']?.toString() ?? '';
     final priceNumber = map['priceNumber'] is num
         ? (map['priceNumber'] as num).toInt()
         : _parseAmount(map['price']?.toString() ?? '');
     return _Property(
+      id: id,
       title: map['title']?.toString() ?? 'Bien sans nom',
       location: map['location']?.toString() ?? '',
       type: map['type']?.toString() ?? '',
       price: map['price']?.toString() ?? '$priceNumber FCFA',
       priceNumber: priceNumber,
       image: map['image']?.toString() ?? 'assets/images/img.jpeg',
+      imageBase64: map['imageBase64']?.toString(),
       isRented: map['isRented'] == true || status.toLowerCase().contains('lou'),
       tenantName: map['tenantName']?.toString(),
     );
@@ -186,6 +195,7 @@ class _MesBiensState extends State<MesBiens> {
                       .map(
                         (doc) => _Property.fromMap(
                           doc.data() as Map<String, dynamic>,
+                          id: doc.id,
                         ),
                       )
                       .toList()
@@ -203,6 +213,7 @@ class _MesBiensState extends State<MesBiens> {
               properties,
               tenantDocs.length,
               monthlyRentTotal == 0 ? propertyRentTotal : monthlyRentTotal,
+              firestoreUserId: user.uid,
             );
           },
         );
@@ -223,8 +234,9 @@ class _MesBiensState extends State<MesBiens> {
   Widget _propertiesContent(
     List<_Property> properties,
     int tenantCount,
-    int monthlyRentTotal,
-  ) {
+    int monthlyRentTotal, {
+    String? firestoreUserId,
+  }) {
     final filtered = _filterProperties(properties);
 
     return Column(
@@ -316,8 +328,55 @@ class _MesBiensState extends State<MesBiens> {
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                   itemCount: filtered.length,
                   separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) =>
-                      _PropertyCard(property: filtered[index]),
+                  itemBuilder: (context, index) {
+                    final property = filtered[index];
+                    return _PropertyCard(
+                      property: property,
+                      onDelete: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Confirmer la suppression'),
+                            content: Text(
+                              'Voulez-vous vraiment supprimer le bien ${property.title} ?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Annuler'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFF993C1D),
+                                ),
+                                child: const Text('Supprimer'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (confirm != true) return;
+
+                        if (firestoreUserId != null && property.id != null) {
+                          await FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(firestoreUserId)
+                              .collection('biens')
+                              .doc(property.id)
+                              .delete();
+                        } else {
+                          setState(() {
+                            _localProperties.removeWhere(
+                              (p) =>
+                                  p.title == property.title &&
+                                  p.location == property.location,
+                            );
+                          });
+                        }
+                      },
+                    );
+                  },
                 ),
         ),
       ],
@@ -445,10 +504,52 @@ class _FilterButton extends StatelessWidget {
   }
 }
 
-class _PropertyCard extends StatelessWidget {
+class _PropertyImage extends StatelessWidget {
   final _Property property;
 
-  const _PropertyCard({required this.property});
+  const _PropertyImage(this.property);
+
+  @override
+  Widget build(BuildContext context) {
+    final imageBytes = _decodeImage(property.imageBase64);
+    if (imageBytes != null) {
+      return Image.memory(
+        imageBytes,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => _fallback(),
+      );
+    }
+
+    return Image.asset(
+      property.image,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => _fallback(),
+    );
+  }
+
+  static Widget _fallback() {
+    return Container(
+      color: _C.creamLight,
+      child: const Icon(Icons.home_work_outlined, color: _C.navy),
+    );
+  }
+
+  static Uint8List? _decodeImage(String? value) {
+    if (value == null || value.isEmpty) return null;
+    try {
+      final payload = value.contains(',') ? value.split(',').last : value;
+      return base64Decode(payload);
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+class _PropertyCard extends StatelessWidget {
+  final _Property property;
+  final VoidCallback onDelete;
+
+  const _PropertyCard({required this.property, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -466,18 +567,7 @@ class _PropertyCard extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: Row(
         children: [
-          SizedBox(
-            width: 112,
-            height: 112,
-            child: Image.asset(
-              property.image,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                color: _C.creamLight,
-                child: const Icon(Icons.home_work_outlined, color: _C.navy),
-              ),
-            ),
-          ),
+          SizedBox(width: 112, height: 112, child: _PropertyImage(property)),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(12),
@@ -498,6 +588,17 @@ class _PropertyCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      IconButton(
+                        onPressed: onDelete,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Color(0xFF993C1D),
+                          size: 20,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 9,
