@@ -44,6 +44,7 @@
 					<key>UISceneStoryboardFile</key>
 					<string>Main</string>
 				</dict>
+
 			</array>
 		</dict>
 	</dict>
@@ -66,5 +67,7 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Necessaire pour scanner les documents des locataires</string>
 </dict>
 </plist>
