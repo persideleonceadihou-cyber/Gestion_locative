@@ -37,6 +37,7 @@ node_modules/
 .vercel/
 .npm-cache/
 .netlify-npm-cache/
+$HOME/
 
 # Symbolication related
 app.*.symbols

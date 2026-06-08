@@ -10,7 +10,8 @@ import 'package:gestion_locative/locataire.dart';
 import 'package:gestion_locative/document.dart';
 import 'package:gestion_locative/paiement.dart';
 import 'package:gestion_locative/profil.dart';
-import 'package:gestion_locative/scan.dart';
+import 'package:gestion_locative/scan_mobile.dart' as scan_mobile;
+import 'package:gestion_locative/scan_web.dart' as scan_web;
 import 'package:gestion_locative/PayeCash.dart';
 import 'package:gestion_locative/home.dart';
 import 'package:gestion_locative/ajoutMaison.dart';
@@ -73,7 +74,7 @@ class MyApp extends StatelessWidget {
         '/paiement': (context) => const Paiement(),
         '/document': (context) => const Document(),
         '/profil': (context) => const Profil(),
-        '/scan': (context) => const Scan(),
+        '/scan': (context) => kIsWeb ? const scan_web.Scan() : const scan_mobile.Scan(),
         '/proprietaire': (context) => const Propretaire(),
         '/locataire': (context) => const LocatairesScreen(),
         '/ajout': (context) => const AjoutMaison(),

@@ -90,7 +90,11 @@ class DocumentScannerFlutterPlugin : FlutterPlugin, MethodCallHandler, ActivityA
     // ─── Method Handlers ──────────────────────────────────────────────────────
 
     private fun camera() {
-        val activity = activityPluginBinding?.activity ?: return
+        val activity = activityPluginBinding?.activity ?: run {
+            result?.error("NO_ACTIVITY", "Scanner requires a foreground activity", null)
+            result = null
+            return
+        }
         val intent = Intent(activity, ScanActivity::class.java)
         intent.putExtra(ScanConstants.OPEN_INTENT_PREFERENCE, ScanConstants.OPEN_CAMERA)
 
