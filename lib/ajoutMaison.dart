@@ -83,11 +83,13 @@ class _AjoutMaisonState extends State<AjoutMaison> {
         return;
       }
 
+      // Ajout d'un timeout pour éviter le chargement infini en cas de réseau instable
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
           .collection('biens')
-          .add({...propertyData, 'createdAt': FieldValue.serverTimestamp()});
+          .add({...propertyData, 'createdAt': FieldValue.serverTimestamp()})
+          .timeout(const Duration(seconds: 20));
 
       if (!mounted) return;
 
@@ -96,16 +98,17 @@ class _AjoutMaisonState extends State<AjoutMaison> {
           content: Text('${_titleController.text.trim()} ajouté avec succès !'),
           backgroundColor: _C.success,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
       );
 
-      // Attendre un court délai avant de fermer pour que le snackbar s'affiche
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Redirection vers l'accueil comme demandé par l'utilisateur
       if (mounted) {
-        Navigator.pop(context, propertyData);
+        // On utilise pushNamedAndRemoveUntil pour s'assurer de revenir à l'accueil proprement
+        Navigator.pushNamedAndRemoveUntil(context, '/accueil', (route) => false);
       }
     } on FirebaseException catch (e) {
       if (mounted) {

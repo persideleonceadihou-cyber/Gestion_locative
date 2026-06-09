@@ -4,7 +4,7 @@
 
 # Sert payer.html directement (page de paiement sans Flutter)
 [[redirects]]
-  from = "/payer"
+  from = "/connect"
   to = "/payer.html"
   status = 200
 

@@ -42,6 +42,7 @@ class _AjoutState extends State<Ajout> {
   String? _selectedPropertyId;
   String? _scannedFolderLabel;
   DateTime? _entryDate;
+  bool _isSaving = false;
 
   @override
   void dispose() {
@@ -57,7 +58,9 @@ class _AjoutState extends State<Ajout> {
   }
 
   Future<void> _submit() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (_isSaving || !_formKey.currentState!.validate()) return;
+
+    setState(() => _isSaving = true);
 
     final name = _nameController.text.trim();
     final room = _roomController.text.trim().toUpperCase();
@@ -65,8 +68,8 @@ class _AjoutState extends State<Ajout> {
     final phone = _phoneController.text.trim();
     final email = _emailController.text.trim();
     final rent = _rentController.text.trim();
-    final emergencyContact = _contactController.text.trim();
     final notes = _notesController.text.trim();
+    final emergencyContact = _contactController.text.trim();
     final dateLabel = _todayLabel();
 
     final tenantData = {
@@ -111,7 +114,9 @@ class _AjoutState extends State<Ajout> {
             .collection('users')
             .doc(user.uid)
             .collection('locataires')
-            .add({...tenantData, 'createdAt': FieldValue.serverTimestamp()});
+            .add({...tenantData, 'createdAt': FieldValue.serverTimestamp()})
+            .timeout(const Duration(seconds: 20));
+            
         savedTenantId = docRef.id;
 
         // Génère et enregistre le code de paiement unique
@@ -119,7 +124,7 @@ class _AjoutState extends State<Ajout> {
           uid: user.uid,
           tenantId: docRef.id,
           tenantName: name,
-        );
+        ).timeout(const Duration(seconds: 10));
 
         if (_selectedPropertyId != null) {
           await FirebaseFirestore.instance
@@ -132,7 +137,7 @@ class _AjoutState extends State<Ajout> {
                 'status': 'Loue',
                 'tenantName': name,
                 'tenantId': docRef.id,
-              });
+              }).timeout(const Duration(seconds: 10));
         }
       }
 
@@ -143,6 +148,7 @@ class _AjoutState extends State<Ajout> {
           content: Text('$name ajouté avec succès !'),
           backgroundColor: _C.success,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -178,9 +184,11 @@ class _AjoutState extends State<Ajout> {
         emergencyContact: emergencyContact.isEmpty
             ? 'Contact urgence non renseigné'
             : 'Contact urgence : $emergencyContact',
+        entryDate: _entryDate,
       );
 
       if (mounted) {
+        // Redirection vers la liste des locataires avec le record pour mise à jour immédiate
         Navigator.of(context).pushNamedAndRemoveUntil(
           '/locataire',
           (route) => false,
@@ -199,11 +207,11 @@ class _AjoutState extends State<Ajout> {
           ),
         ),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Enregistrement impossible pour le moment.'),
+          content: Text('Erreur: ${e.toString()}'),
           backgroundColor: _C.danger,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -211,6 +219,8 @@ class _AjoutState extends State<Ajout> {
           ),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -634,13 +644,15 @@ class _AjoutState extends State<Ajout> {
 
                   // ── Bouton valider ──
                   GestureDetector(
-                    onTap: _submit,
+                    onTap: _isSaving ? null : _submit,
                     child: Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(vertical: 18),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFF102A43), Color(0xFF1F6FEB)],
+                        gradient: LinearGradient(
+                          colors: _isSaving
+                              ? [const Color(0xFF607086), const Color(0xFF7D8CA0)]
+                              : [const Color(0xFF102A43), const Color(0xFF1F6FEB)],
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
                         ),
@@ -653,25 +665,48 @@ class _AjoutState extends State<Ajout> {
                           ),
                         ],
                       ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.person_add_alt_1_outlined,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                          SizedBox(width: 10),
-                          Text(
-                            'Ajouter à la liste',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w800,
+                      child: _isSaving
+                          ? const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                                SizedBox(width: 12),
+                                Text(
+                                  'Enregistrement...',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            )
+                          : const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.person_add_alt_1_outlined,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Ajouter à la liste',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                        ],
-                      ),
                     ),
                   ),
                 ],
