@@ -39,8 +39,6 @@ dependencies:
   fl_chart: ^0.69.0
   http: ^1.6.0
   shared_preferences: ^2.5.3
-  document_scanner_flutter:
-    path: third_party/document_scanner_flutter
   image_picker: ^1.1.2
    # 🔥 Firebase
   # 🔥 Firebase (versions compatibles)
@@ -50,10 +48,7 @@ dependencies:
   url_launcher: ^6.3.0
   flutter_web_plugins:
     sdk: flutter
-  flutter_native_splash: 2.3.1
-  
 
-  
 
 dev_dependencies:
   flutter_test:

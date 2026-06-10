@@ -18,8 +18,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
   late Animation<double> _slideAnimation;
   late Animation<double> _breatheAnimation;
 
-  int _activePills = 0;
-
   @override
   void initState() {
     super.initState();
@@ -59,21 +57,6 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
     );
 
     _fadeController.forward();
-
-    Future.delayed(const Duration(milliseconds: 600), () {
-      if (mounted) setState(() => _activePills = 1);
-    });
-    Future.delayed(const Duration(milliseconds: 1400), () {
-      if (mounted) setState(() => _activePills = 2);
-    });
-    Future.delayed(const Duration(milliseconds: 2200), () {
-      if (mounted) setState(() => _activePills = 3);
-    });
-
-    Future.delayed(const Duration(seconds: 2), () {
-      if (!mounted) return;
-      Navigator.pushReplacementNamed(context, '/connect');
-    });
   }
 
   @override
@@ -219,7 +202,7 @@ class _HomeState extends State<Home> with TickerProviderStateMixin {
       children: modules.asMap().entries.map((entry) {
         final index = entry.key;
         final module = entry.value;
-        final isActive = index < _activePills;
+        final isActive = index < 3;
 
         return AnimatedContainer(
           duration: const Duration(milliseconds: 400),

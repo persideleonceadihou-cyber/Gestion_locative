@@ -307,6 +307,7 @@ class _LocatairesScreenState extends State<LocatairesScreen> {
   final TextEditingController _searchController = TextEditingController();
   final List<TenantRecord> _tenants = List.of(localPreviewTenants);
   String _query = '';
+  bool _openedInitialTenantDetail = false;
 
   @override
   void initState() {
@@ -314,6 +315,19 @@ class _LocatairesScreenState extends State<LocatairesScreen> {
     final initialTenant = widget.initialTenant;
     if (initialTenant != null) {
       _tenants.insert(0, initialTenant);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted ||
+            _openedInitialTenantDetail ||
+            widget.initialTenant == null) {
+          return;
+        }
+        _openedInitialTenantDetail = true;
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => TenantDetailScreen(tenant: initialTenant),
+          ),
+        );
+      });
     }
   }
 
@@ -407,6 +421,12 @@ class _LocatairesScreenState extends State<LocatairesScreen> {
           result.copyWith(id: DateTime.now().microsecondsSinceEpoch.toString()),
         );
       });
+    } else if (result is TenantRecord && user != null) {
+      setState(() {
+        if (!_tenants.any((tenant) => tenant.id == result.id)) {
+          _tenants.insert(0, result);
+        }
+      });
     }
   }
 
@@ -475,7 +495,9 @@ class _LocatairesScreenState extends State<LocatairesScreen> {
               context: context,
               builder: (context) => AlertDialog(
                 title: const Text('Confirmer la suppression'),
-                content: Text('Voulez-vous vraiment supprimer le locataire ${tenant.name} ?'),
+                content: Text(
+                  'Voulez-vous vraiment supprimer le locataire ${tenant.name} ?',
+                ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.pop(context, false),
@@ -483,7 +505,9 @@ class _LocatairesScreenState extends State<LocatairesScreen> {
                   ),
                   TextButton(
                     onPressed: () => Navigator.pop(context, true),
-                    style: TextButton.styleFrom(foregroundColor: const Color(0xFF993C1D)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: const Color(0xFF993C1D),
+                    ),
                     child: const Text('Supprimer'),
                   ),
                 ],
@@ -640,9 +664,7 @@ class _TenantDetailScreenState extends State<TenantDetailScreen> {
 
   Future<void> _openEdit() async {
     final result = await Navigator.of(context).push<TenantRecord>(
-      MaterialPageRoute(
-        builder: (_) => ModifierLocataire(tenant: _tenant),
-      ),
+      MaterialPageRoute(builder: (_) => ModifierLocataire(tenant: _tenant)),
     );
     if (result != null && mounted) {
       setState(() => _tenant = result);
@@ -686,7 +708,8 @@ class _TenantDetailScreenState extends State<TenantDetailScreen> {
               _InfoRow(label: 'Loyer', value: _tenant.rentAmount),
               _InfoRow(label: 'Telephone', value: _tenant.phone),
               _InfoRow(label: 'Email', value: _tenant.email),
-              if (_tenant.paymentCode.isNotEmpty) _CodeRow(code: _tenant.paymentCode),
+              if (_tenant.paymentCode.isNotEmpty)
+                _CodeRow(code: _tenant.paymentCode),
             ],
           ),
           const SizedBox(height: 12),
@@ -861,19 +884,28 @@ class _PaymentBalanceCardState extends State<_PaymentBalanceCard> {
         final data = doc.data();
         total += (data['monthsCount'] as num?)?.toInt() ?? 1;
       }
-      if (mounted) setState(() { _monthsPaid = total; _loading = false; });
+      if (mounted)
+        setState(() {
+          _monthsPaid = total;
+          _loading = false;
+        });
     } catch (_) {
       if (mounted) setState(() => _loading = false);
     }
   }
 
   String _fmt(int v) => v.toString().replaceAllMapped(
-      RegExp(r'\B(?=(\d{3})+(?!\d))'), (_) => ' ');
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (_) => ' ',
+  );
 
   @override
   Widget build(BuildContext context) {
-    final monthly = int.tryParse(
-        widget.tenant.rentAmount.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+    final monthly =
+        int.tryParse(
+          widget.tenant.rentAmount.replaceAll(RegExp(r'[^0-9]'), ''),
+        ) ??
+        0;
     final entry = widget.tenant.entryDate;
     final now = DateTime.now();
     final monthsElapsed = entry != null
@@ -889,39 +921,87 @@ class _PaymentBalanceCardState extends State<_PaymentBalanceCard> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: const Color(0xFF1A2B5E).withValues(alpha: .06), blurRadius: 14, offset: const Offset(0, 6))],
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1A2B5E).withValues(alpha: .06),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Row(
             children: [
-              Icon(Icons.account_balance_wallet_outlined, color: Color(0xFF1A2B5E), size: 18),
+              Icon(
+                Icons.account_balance_wallet_outlined,
+                color: Color(0xFF1A2B5E),
+                size: 18,
+              ),
               SizedBox(width: 8),
-              Text('Suivi des paiements', style: TextStyle(color: Color(0xFF1A2B5E), fontWeight: FontWeight.w900, fontSize: 15)),
+              Text(
+                'Suivi des paiements',
+                style: TextStyle(
+                  color: Color(0xFF1A2B5E),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 15,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 14),
           if (_loading)
-            const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)))
+            const Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
           else ...[
-            _BilanRow(label: 'Date d\'entrée', value: entry != null
-                ? '${entry.day.toString().padLeft(2,'0')}/${entry.month.toString().padLeft(2,'0')}/${entry.year}'
-                : 'Non renseignée', icon: Icons.calendar_today_outlined),
-            _BilanRow(label: 'Mois écoulés', value: monthsElapsed != null ? '$monthsElapsed mois' : '—', icon: Icons.timelapse_outlined),
-            _BilanRow(label: 'Mois payés', value: '$_monthsPaid mois', icon: Icons.check_circle_outline, color: const Color(0xFF149954)),
-            _BilanRow(label: 'Mois restants', value: monthsOwed != null ? '$monthsOwed mois' : '—',
-                icon: Icons.pending_outlined, color: monthsOwed != null && monthsOwed > 0 ? const Color(0xFFE53935) : const Color(0xFF149954)),
+            _BilanRow(
+              label: 'Date d\'entrée',
+              value: entry != null
+                  ? '${entry.day.toString().padLeft(2, '0')}/${entry.month.toString().padLeft(2, '0')}/${entry.year}'
+                  : 'Non renseignée',
+              icon: Icons.calendar_today_outlined,
+            ),
+            _BilanRow(
+              label: 'Mois écoulés',
+              value: monthsElapsed != null ? '$monthsElapsed mois' : '—',
+              icon: Icons.timelapse_outlined,
+            ),
+            _BilanRow(
+              label: 'Mois payés',
+              value: '$_monthsPaid mois',
+              icon: Icons.check_circle_outline,
+              color: const Color(0xFF149954),
+            ),
+            _BilanRow(
+              label: 'Mois restants',
+              value: monthsOwed != null ? '$monthsOwed mois' : '—',
+              icon: Icons.pending_outlined,
+              color: monthsOwed != null && monthsOwed > 0
+                  ? const Color(0xFFE53935)
+                  : const Color(0xFF149954),
+            ),
             const Divider(height: 20, color: Color(0xFFEEF3F8)),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Solde restant à payer', style: TextStyle(color: Color(0xFF607086), fontSize: 13)),
+                const Text(
+                  'Solde restant à payer',
+                  style: TextStyle(color: Color(0xFF607086), fontSize: 13),
+                ),
                 Text(
                   balance != null ? '${_fmt(balance)} FCFA' : '— FCFA',
                   style: TextStyle(
-                    color: balance != null && balance > 0 ? const Color(0xFFE53935) : const Color(0xFF149954),
-                    fontSize: 17, fontWeight: FontWeight.w900,
+                    color: balance != null && balance > 0
+                        ? const Color(0xFFE53935)
+                        : const Color(0xFF149954),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
               ],
@@ -938,7 +1018,12 @@ class _BilanRow extends StatelessWidget {
   final String value;
   final IconData icon;
   final Color? color;
-  const _BilanRow({required this.label, required this.value, required this.icon, this.color});
+  const _BilanRow({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -948,8 +1033,20 @@ class _BilanRow extends StatelessWidget {
         children: [
           Icon(icon, size: 15, color: color ?? const Color(0xFF8A9BB0)),
           const SizedBox(width: 8),
-          Expanded(child: Text(label, style: const TextStyle(color: Color(0xFF607086), fontSize: 13))),
-          Text(value, style: TextStyle(color: color ?? const Color(0xFF1A2B5E), fontWeight: FontWeight.w700, fontSize: 13)),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(color: Color(0xFF607086), fontSize: 13),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: color ?? const Color(0xFF1A2B5E),
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
         ],
       ),
     );
@@ -979,7 +1076,11 @@ class _CodeRow extends StatelessWidget {
               children: [
                 const Text(
                   'Code de paiement',
-                  style: TextStyle(color: Color(0xFFABC4E0), fontSize: 10, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: Color(0xFFABC4E0),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 Text(
                   code,
@@ -1001,13 +1102,18 @@ class _CodeRow extends StatelessWidget {
                     content: Text('Code $code copié !'),
                     backgroundColor: const Color(0xFF149954),
                     behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     duration: const Duration(seconds: 2),
                   ),
                 );
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(8),
@@ -1016,7 +1122,14 @@ class _CodeRow extends StatelessWidget {
                   children: [
                     Icon(Icons.copy_rounded, color: Colors.white, size: 14),
                     SizedBox(width: 5),
-                    Text('Copier', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w700)),
+                    Text(
+                      'Copier',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
               ),

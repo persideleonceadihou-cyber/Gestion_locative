@@ -878,11 +878,11 @@ class _PayCashSheetState extends State<_PayCashSheet> {
     // Le code est stocké dans Firestore — on le récupère via tenantId
     // Pour l'instant on utilise tenantId comme fallback dans le lien général
     // Le locataire saisira son code sur la page
-    return 'https://gestion-locative.netlify.app/connect';
+    return 'https://gestion-locativ.netlify.app/connect';
   }
 
   String _buildGeneralLink() {
-    return 'https://gestion-locative.netlify.app/connect';
+    return 'https://gestion-locativ.netlify.app/connect';
   }
 
   void _copyLink(String link) {

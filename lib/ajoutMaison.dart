@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:gestion_locative/app_background.dart';
+import 'package:gestion_locative/mesBiens.dart';
 import 'package:image_picker/image_picker.dart';
 
 class _C {
@@ -105,11 +106,12 @@ class _AjoutMaisonState extends State<AjoutMaison> {
         ),
       );
 
-      // Redirection vers l'accueil comme demandé par l'utilisateur
-      if (mounted) {
-        // On utilise pushNamedAndRemoveUntil pour s'assurer de revenir à l'accueil proprement
-        Navigator.pushNamedAndRemoveUntil(context, '/accueil', (route) => false);
-      }
+      if (!mounted) return;
+
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MesBiens()),
+        (route) => false,
+      );
     } on FirebaseException catch (e) {
       if (mounted) {
         _showSaveError(e.message ?? 'Enregistrement impossible.');

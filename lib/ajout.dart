@@ -109,6 +109,7 @@ class _AjoutState extends State<Ajout> {
     try {
       final user = FirebaseAuth.instance.currentUser;
       String? savedTenantId;
+      String generatedCode = '';
       if (user != null) {
         final docRef = await FirebaseFirestore.instance
             .collection('users')
@@ -116,11 +117,11 @@ class _AjoutState extends State<Ajout> {
             .collection('locataires')
             .add({...tenantData, 'createdAt': FieldValue.serverTimestamp()})
             .timeout(const Duration(seconds: 20));
-            
+
         savedTenantId = docRef.id;
 
         // Génère et enregistre le code de paiement unique
-        await PaymentCodeService.createForTenant(
+        generatedCode = await PaymentCodeService.createForTenant(
           uid: user.uid,
           tenantId: docRef.id,
           tenantName: name,
@@ -137,7 +138,8 @@ class _AjoutState extends State<Ajout> {
                 'status': 'Loue',
                 'tenantName': name,
                 'tenantId': docRef.id,
-              }).timeout(const Duration(seconds: 10));
+              })
+              .timeout(const Duration(seconds: 10));
         }
       }
 
@@ -185,14 +187,15 @@ class _AjoutState extends State<Ajout> {
             ? 'Contact urgence non renseigné'
             : 'Contact urgence : $emergencyContact',
         entryDate: _entryDate,
+        paymentCode: generatedCode,
       );
 
       if (mounted) {
-        // Redirection vers la liste des locataires avec le record pour mise à jour immédiate
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/locataire',
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(
+            builder: (_) => LocatairesScreen(initialTenant: tenantRecord),
+          ),
           (route) => false,
-          arguments: tenantRecord,
         );
       }
     } on FirebaseException catch (e) {
@@ -241,6 +244,25 @@ class _AjoutState extends State<Ajout> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
+  }
+
+  Future<void> _pickEntryDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initial = _entryDate == null
+        ? today
+        : DateTime(_entryDate!.year, _entryDate!.month, _entryDate!.day);
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial.isAfter(today) ? today : initial,
+      firstDate: DateTime(2000),
+      lastDate: today,
+    );
+
+    if (picked != null && mounted) {
+      setState(() => _entryDate = picked);
+    }
   }
 
   @override
@@ -486,40 +508,55 @@ class _AjoutState extends State<Ajout> {
                         const SizedBox(height: 16),
 
                         // Date d'entrée
-                        const Text('Date d\'entrée', style: TextStyle(color: Color(0xFF607086), fontSize: 12, fontWeight: FontWeight.w600)),
+                        const Text(
+                          'Date d\'entrée',
+                          style: TextStyle(
+                            color: Color(0xFF607086),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                         const SizedBox(height: 8),
-                        GestureDetector(
-                          onTap: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: _entryDate ?? DateTime.now(),
-                              firstDate: DateTime(2000),
-                              lastDate: DateTime.now(),
-                              locale: const Locale('fr'),
-                            );
-                            if (picked != null) setState(() => _entryDate = picked);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF0F4FA),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: const Color(0xFFDDEAF8), width: 1.5),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today_outlined, color: Color(0xFF7D8CA0), size: 20),
-                                const SizedBox(width: 10),
-                                Text(
-                                  _entryDate != null
-                                      ? '${_entryDate!.day.toString().padLeft(2,'0')}/${_entryDate!.month.toString().padLeft(2,'0')}/${_entryDate!.year}'
-                                      : 'Sélectionner la date d\'entrée',
-                                  style: TextStyle(
-                                    color: _entryDate != null ? const Color(0xFF132238) : const Color(0xFF7D8CA0),
-                                    fontSize: 14, fontWeight: FontWeight.w600,
-                                  ),
+                        Material(
+                          color: const Color(0xFFF0F4FA),
+                          borderRadius: BorderRadius.circular(16),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: _pickEntryDate,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 14,
+                                vertical: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFFDDEAF8),
+                                  width: 1.5,
                                 ),
-                              ],
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.calendar_today_outlined,
+                                    color: Color(0xFF7D8CA0),
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    _entryDate != null
+                                        ? '${_entryDate!.day.toString().padLeft(2, '0')}/${_entryDate!.month.toString().padLeft(2, '0')}/${_entryDate!.year}'
+                                        : 'Sélectionner la date d\'entrée',
+                                    style: TextStyle(
+                                      color: _entryDate != null
+                                          ? const Color(0xFF132238)
+                                          : const Color(0xFF7D8CA0),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         ),
@@ -651,8 +688,14 @@ class _AjoutState extends State<Ajout> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: _isSaving
-                              ? [const Color(0xFF607086), const Color(0xFF7D8CA0)]
-                              : [const Color(0xFF102A43), const Color(0xFF1F6FEB)],
+                              ? [
+                                  const Color(0xFF607086),
+                                  const Color(0xFF7D8CA0),
+                                ]
+                              : [
+                                  const Color(0xFF102A43),
+                                  const Color(0xFF1F6FEB),
+                                ],
                           begin: Alignment.centerLeft,
                           end: Alignment.centerRight,
                         ),

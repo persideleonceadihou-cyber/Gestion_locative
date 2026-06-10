@@ -31,10 +31,10 @@ class _PayeCashState extends State<PayeCash> {
   String _paymentLink(TenantRecord tenant) {
     final code = tenant.paymentCode;
     if (code.isNotEmpty) {
-      return 'https://gestion-locative.netlify.app/connect?code=$code';
+      return 'https://gestion-locativ.netlify.app/connect?code=$code';
     }
     // Fallback si code pas encore généré
-    return 'https://gestion-locative.netlify.app/connect';
+    return 'https://gestion-locativ.netlify.app/connect';
   }
 
 
@@ -52,7 +52,7 @@ class _PayeCashState extends State<PayeCash> {
 
   // Lien général — le locataire saisira son code sur la page
   String _generalLink() {
-    return 'https://gestion-locative.netlify.app/connect';
+    return 'https://gestion-locativ.netlify.app/connect';
   }
 
   void _copyGeneralLink() {

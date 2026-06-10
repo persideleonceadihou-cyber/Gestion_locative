@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:gestion_locative/mesBiens.dart';
 import 'package:gestion_locative/conect.dart';
@@ -26,30 +27,59 @@ void main() async {
   if (kIsWeb) {
     usePathUrlStrategy();
     final String url = Uri.base.toString();
-    
+
     // Intercepter toute variante de /pay ou /payer pour éviter la redirection vers la connexion
     if (url.contains('/pay') || url.contains('/payer')) {
       await Firebase.initializeApp(
-          options: DefaultFirebaseOptions.currentPlatform);
-      runApp(MaterialApp(
-        debugShowCheckedModeBanner: false,
-        title: 'Paiement Loyer',
-        theme: ThemeData(
-          colorScheme:
-              ColorScheme.fromSeed(seedColor: const Color(0xFF1F6FEB)),
-          useMaterial3: true,
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
+      runApp(
+        MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: 'Paiement Loyer',
+          theme: ThemeData(
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF1F6FEB),
+            ),
+            useMaterial3: true,
+          ),
+          home: TenantPaymentPage(code: Uri.base.queryParameters['code'] ?? ''),
         ),
-        home: TenantPaymentPage(
-          code: Uri.base.queryParameters['code'] ?? '',
-        ),
-      ));
+      );
       return;
     }
   }
 
-  await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Home();
+        }
+
+        final user = snapshot.data;
+        if (user == null) {
+          return const Connect();
+        }
+
+        final userName =
+            user.displayName ??
+            (user.email?.contains('@') == true
+                ? user.email!.split('@').first
+                : 'Utilisateur');
+        return Accueil(userName: userName);
+      },
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -61,11 +91,10 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Gestion locative',
       theme: ThemeData(
-        colorScheme:
-            ColorScheme.fromSeed(seedColor: const Color(0xFF1F6FEB)),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1F6FEB)),
         useMaterial3: true,
       ),
-      home: const Home(),
+      home: const AuthGate(),
       routes: {
         '/connect': (context) => const Connect(),
         '/accueil': (context) => Accueil(userName: "Utilisateur"),

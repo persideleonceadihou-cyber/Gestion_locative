@@ -12,6 +12,7 @@ include: package:flutter_lints/flutter.yaml
 analyzer:
   exclude:
     - $HOME/**
+    - third_party/document_scanner_flutter/**
     - third_party/**/example/**
 
 linter:
