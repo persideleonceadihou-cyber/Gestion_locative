@@ -1,7 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:gestion_locative/mesBiens.dart';
 import 'package:gestion_locative/conect.dart';
@@ -50,40 +51,51 @@ void main() async {
     }
   }
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(const MyApp());
+  final firebaseInit = Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  runApp(MyApp(firebaseInit: firebaseInit));
 }
 
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
+class StartupFlow extends StatefulWidget {
+  final Future<void> firebaseInit;
+
+  const StartupFlow({super.key, required this.firebaseInit});
+
+  @override
+  State<StartupFlow> createState() => _StartupFlowState();
+}
+
+class _StartupFlowState extends State<StartupFlow> {
+  late final Future<void> _ready;
+
+  Future<void> _bootstrap() async {
+    await widget.firebaseInit;
+    await Future.delayed(const Duration(milliseconds: 900));
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _ready = _bootstrap();
+    _ready.then((_) {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const Connect()),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Home();
-        }
-
-        final user = snapshot.data;
-        if (user == null) {
-          return const Connect();
-        }
-
-        final userName =
-            user.displayName ??
-            (user.email?.contains('@') == true
-                ? user.email!.split('@').first
-                : 'Utilisateur');
-        return Accueil(userName: userName);
-      },
-    );
+    return const Home();
   }
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final Future<void> firebaseInit;
+
+  const MyApp({super.key, required this.firebaseInit});
 
   @override
   Widget build(BuildContext context) {
@@ -94,7 +106,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1F6FEB)),
         useMaterial3: true,
       ),
-      home: const AuthGate(),
+      home: StartupFlow(firebaseInit: firebaseInit),
       routes: {
         '/connect': (context) => const Connect(),
         '/accueil': (context) => Accueil(userName: "Utilisateur"),

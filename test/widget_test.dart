@@ -1,15 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gestion_locative/main.dart';
 
 void main() {
-  testWidgets('shows the splash screen', (WidgetTester tester) async {
-    await tester.pumpWidget(const MyApp());
+  testWidgets('shows the home screen first', (WidgetTester tester) async {
+    final completer = Completer<void>();
+    await tester.pumpWidget(MyApp(firebaseInit: completer.future));
 
     expect(find.text('Gestion Locative'), findsOneWidget);
     expect(
       find.text(
-        'Votre espace de suivi des biens, locataires et paiements se prepare.',
+        'Biens · Locataires · Paiements',
       ),
       findsOneWidget,
     );
